@@ -15,8 +15,6 @@ export default function App() {
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
-    setConnected(true)
-
     const arc = { ...event, id: `${Date.now()}-${Math.random()}` }
 
     setArcs((prev) => {
@@ -42,7 +40,10 @@ export default function App() {
     arcTimers.current.push(timer)
   }, [])
 
-  useWebSocket(handleEvent)
+  useWebSocket(handleEvent, {
+    onOpen: () => setConnected(true),
+    onClose: () => setConnected(false),
+  })
 
   useEffect(() => {
     const load = async () => {
