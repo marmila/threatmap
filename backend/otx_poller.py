@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 OTX_API_KEY = os.getenv("OTX_API_KEY", "")
 OTX_BASE = "https://otx.alienvault.com/api/v1"
+THREATFOX_API_KEY = os.getenv("THREATFOX_API_KEY", "0" * 64)
 
 _threat_ips: set[str] = set()
 
@@ -58,7 +59,7 @@ async def _refresh():
         try:
             r = await client.post(
                 "https://threatfox-api.abuse.ch/api/v1/",
-                json={"query": "get_iocs", "days": 1},
+                json={"query": "get_iocs", "days": 1, "api_key": THREATFOX_API_KEY},
             )
             if r.status_code == 200:
                 for ioc in r.json().get("data", []) or []:

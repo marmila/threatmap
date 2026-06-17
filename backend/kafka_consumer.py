@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import Callable, Awaitable
 
@@ -13,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "attack-events")
+KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
+KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
+KAFKA_USERNAME = os.getenv("KAFKA_USERNAME", "")
+KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD", "")
 HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
@@ -23,23 +28,32 @@ async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
 
 
 def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
-    try:
-        from kafka import KafkaConsumer
-        consumer = KafkaConsumer(
-            KAFKA_TOPIC,
-            bootstrap_servers=KAFKA_BOOTSTRAP,
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            auto_offset_reset="latest",
-            group_id="threatmap-backend",
-        )
-        logger.info(f"Kafka consumer connected to {KAFKA_BOOTSTRAP}, topic={KAFKA_TOPIC}")
-        for msg in consumer:
-            event = _enrich(msg.value)
-            if event:
-                asyncio.run_coroutine_threadsafe(broadcast(event), loop)
-                asyncio.run_coroutine_threadsafe(_persist(event), loop)
-    except Exception as e:
-        logger.error(f"Kafka consumer failed: {e}")
+    from kafka import KafkaConsumer
+
+    consumer_kwargs = dict(
+        bootstrap_servers=KAFKA_BOOTSTRAP,
+        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        auto_offset_reset="latest",
+        group_id="threatmap-backend",
+        security_protocol=KAFKA_SECURITY_PROTOCOL,
+    )
+    if KAFKA_SASL_MECHANISM:
+        consumer_kwargs["sasl_mechanism"] = KAFKA_SASL_MECHANISM
+        consumer_kwargs["sasl_plain_username"] = KAFKA_USERNAME
+        consumer_kwargs["sasl_plain_password"] = KAFKA_PASSWORD
+
+    while True:
+        try:
+            consumer = KafkaConsumer(KAFKA_TOPIC, **consumer_kwargs)
+            logger.info(f"Kafka consumer connected to {KAFKA_BOOTSTRAP}, topic={KAFKA_TOPIC}")
+            for msg in consumer:
+                event = _enrich(msg.value)
+                if event:
+                    asyncio.run_coroutine_threadsafe(broadcast(event), loop)
+                    asyncio.run_coroutine_threadsafe(_persist(event), loop)
+        except Exception as e:
+            logger.error(f"Kafka consumer failed: {e}, retrying in 10s")
+            time.sleep(10)
 
 
 def _enrich(raw: dict) -> dict | None:
