@@ -37,6 +37,7 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
   const [selected, setSelected] = useState(null)
 
   return (
+    <>
     <div style={s.panel}>
       <div>
         <div style={s.title}>THREATMAP</div>
@@ -96,5 +97,6 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
     </div>
 
     <EventDetail event={selected} onClose={() => setSelected(null)} />
+    </>
   )
 }
