@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import EventDetail from './EventDetail.jsx'
 
 const s = {
   panel: {
@@ -33,6 +34,7 @@ const s = {
 
 export default function StatsPanel({ events, total, topCountries, connected }) {
   const maxCount = topCountries[0]?.count || 1
+  const [selected, setSelected] = useState(null)
 
   return (
     <div style={s.panel}>
@@ -72,7 +74,8 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
       </div>
       <div style={s.feed}>
         {events.slice(0, 30).map((e, i) => (
-          <div key={i} style={{ ...s.event, ...(e.known_threat ? s.eventThreat : {}) }}>
+          <div key={i} style={{ ...s.event, ...(e.known_threat ? s.eventThreat : {}), cursor: 'pointer' }}
+            onClick={() => setSelected(e)}>
             <div style={s.ip}>
               {e.src_ip}
               {e.known_threat && (
@@ -91,5 +94,7 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
         ))}
       </div>
     </div>
+
+    <EventDetail event={selected} onClose={() => setSelected(null)} />
   )
 }
