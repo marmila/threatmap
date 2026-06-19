@@ -57,6 +57,16 @@ async def _refresh():
             logger.warning(f"Feodo fetch failed: {e}")
 
         try:
+            r = await client.get("https://sshbl.abuse.ch/downloads/ipblocklist.txt")
+            if r.status_code == 200:
+                for line in r.text.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        ips.add(line)
+        except Exception as e:
+            logger.warning(f"SSH blocklist fetch failed: {e}")
+
+        try:
             r = await client.post(
                 "https://threatfox-api.abuse.ch/api/v1/",
                 json={"query": "get_iocs", "days": 1, "api_key": THREATFOX_API_KEY},

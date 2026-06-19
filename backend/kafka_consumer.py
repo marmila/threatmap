@@ -36,6 +36,10 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
         auto_offset_reset="latest",
         group_id="threatmap-backend",
         security_protocol=KAFKA_SECURITY_PROTOCOL,
+        max_poll_interval_ms=600000,
+        max_poll_records=10,
+        session_timeout_ms=30000,
+        heartbeat_interval_ms=10000,
     )
     if KAFKA_SASL_MECHANISM:
         consumer_kwargs["sasl_mechanism"] = KAFKA_SASL_MECHANISM
