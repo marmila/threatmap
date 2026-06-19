@@ -40,7 +40,12 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
     <>
     <div style={s.panel}>
       <div>
-        <div style={s.title}>THREATMAP</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={s.title}>THREATMAP</div>
+          <div style={{ color: '#334155', fontSize: '9px', letterSpacing: '1px' }}>
+            {import.meta.env.VITE_APP_VERSION || 'dev'}
+          </div>
+        </div>
         <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center' }}>
           <span style={{ ...s.badge, background: connected ? '#14532d' : '#450a0a', color: connected ? '#4ade80' : '#f87171' }}>
             {connected ? '● LIVE' : '○ RECONNECTING'}
