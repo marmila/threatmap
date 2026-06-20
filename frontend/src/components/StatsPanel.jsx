@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import EventDetail from './EventDetail.jsx'
 
 const eventColor = (t) => {
@@ -14,35 +14,59 @@ const s = {
     position: 'fixed', top: 0, right: 0, width: '280px', height: '100vh',
     background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
     borderLeft: '1px solid #1e2535', padding: '20px 16px',
-    display: 'flex', flexDirection: 'column', gap: '20px',
+    display: 'flex', flexDirection: 'column', gap: '16px',
     fontFamily: "'Courier New', monospace", zIndex: 10,
+    overflowY: 'auto',
   },
   title: { color: '#f1f5f9', fontSize: '13px', fontWeight: 'bold', letterSpacing: '2px' },
   badge: {
     display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
     fontSize: '10px', fontWeight: 'bold', letterSpacing: '1px',
   },
-  section: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  section: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { color: '#4ade80', fontSize: '10px', letterSpacing: '2px' },
   bigNum: { color: '#f1f5f9', fontSize: '28px', fontWeight: 'bold' },
   bar: { height: '2px', background: '#1e2535', borderRadius: '2px', margin: '2px 0' },
   barFill: { height: '100%', borderRadius: '2px', background: '#fbbf24', transition: 'width 0.5s' },
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' },
   country: { color: '#94a3b8' },
+  ipAddr: { color: '#60a5fa', fontSize: '10px', fontFamily: 'monospace' },
   count: { color: '#fbbf24', fontWeight: 'bold' },
-  feed: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' },
+  feed: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0 },
   event: {
     padding: '6px 8px', background: '#13161f', borderRadius: '4px',
-    borderLeft: '2px solid #fbbf24', fontSize: '10px',
+    fontSize: '10px', cursor: 'pointer',
   },
-  eventThreat: { borderLeft: '2px solid #ef4444' },
-  ip: { color: '#60a5fa' },
+  ip: { color: '#60a5fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   detail: { color: '#94a3b8', marginTop: '2px' },
+  countBadge: {
+    fontSize: '9px', color: '#475569', background: '#1e2535',
+    borderRadius: '3px', padding: '1px 5px', flexShrink: 0,
+  },
 }
 
-export default function StatsPanel({ events, total, topCountries, connected }) {
-  const maxCount = topCountries[0]?.count || 1
+export default function StatsPanel({ events, total, topCountries, topIps = [], connected }) {
+  const maxCountryCount = topCountries[0]?.count || 1
+  const maxIpCount = topIps[0]?.count || 1
   const [selected, setSelected] = useState(null)
+
+  // Deduplicate feed by IP: keep most-recent event per IP, annotate with count
+  const dedupedFeed = useMemo(() => {
+    const seen = new Set()
+    const result = []
+    const ipCounts = {}
+    for (const e of events) {
+      ipCounts[e.src_ip] = (ipCounts[e.src_ip] || 0) + 1
+    }
+    for (const e of events) {
+      if (!seen.has(e.src_ip)) {
+        result.push({ ...e, _count: ipCounts[e.src_ip] })
+        seen.add(e.src_ip)
+      }
+      if (result.length >= 25) break
+    }
+    return result
+  }, [events])
 
   return (
     <>
@@ -54,7 +78,7 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
             {import.meta.env.VITE_APP_VERSION || 'dev'}
           </div>
         </div>
-        <div style={{ marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <div style={{ marginTop: '4px' }}>
           <span style={{ ...s.badge, background: connected ? '#14532d' : '#450a0a', color: connected ? '#4ade80' : '#f87171' }}>
             {connected ? '● LIVE' : '○ RECONNECTING'}
           </span>
@@ -69,14 +93,38 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
       {topCountries.length > 0 && (
         <div style={s.section}>
           <div style={s.label}>TOP SOURCES</div>
-          {topCountries.slice(0, 7).map((c) => (
+          {topCountries.slice(0, 5).map((c) => (
             <div key={c.country}>
               <div style={s.row}>
                 <span style={s.country}>{c.country || 'Unknown'}</span>
-                <span style={s.count}>{c.count}</span>
+                <span style={s.count}>{c.count.toLocaleString()}</span>
               </div>
               <div style={s.bar}>
-                <div style={{ ...s.barFill, width: `${(c.count / maxCount) * 100}%` }} />
+                <div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {topIps.length > 0 && (
+        <div style={s.section}>
+          <div style={s.label}>TOP IPs</div>
+          {topIps.slice(0, 5).map((entry) => (
+            <div key={entry.ip}>
+              <div style={s.row}>
+                <a href={`https://www.abuseipdb.com/check/${entry.ip}`}
+                   target="_blank" rel="noreferrer"
+                   style={{ ...s.ipAddr, textDecoration: 'none' }}>
+                  {entry.ip}
+                  {entry.known_threat && (
+                    <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>
+                  )}
+                </a>
+                <span style={s.count}>{entry.count.toLocaleString()}</span>
+              </div>
+              <div style={s.bar}>
+                <div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} />
               </div>
             </div>
           ))}
@@ -87,22 +135,26 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
         <div style={s.label}>LIVE FEED</div>
       </div>
       <div style={s.feed}>
-        {events.slice(0, 30).map((e, i) => (
-          <div key={i} style={{ ...s.event, borderLeft: `2px solid ${eventColor(e.event_type)}`, cursor: 'pointer' }}
+        {dedupedFeed.map((e, i) => (
+          <div key={i}
+            style={{ ...s.event, borderLeft: `2px solid ${eventColor(e.event_type)}` }}
             onClick={() => setSelected(e)}>
             <div style={s.ip}>
-              {e.src_ip}
-              {e.known_threat && (
-                <span style={{ ...s.badge, background: '#450a0a', color: '#f87171', marginLeft: '6px' }}>
-                  KNOWN THREAT
-                </span>
-              )}
+              <span>{e.src_ip}</span>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
+                {e.known_threat && (
+                  <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>
+                    THREAT
+                  </span>
+                )}
+              </div>
             </div>
             <div style={s.detail}>
-              {e.src_country} {e.src_city ? `· ${e.src_city}` : ''}
+              {e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}
             </div>
             <div style={s.detail}>
-              {e.event_type}{e.username ? ` · user: ${e.username}` : ''}
+              {e.event_type}{e.username ? ` · ${e.username}` : ''}
             </div>
           </div>
         ))}

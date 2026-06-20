@@ -14,7 +14,11 @@ ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 
 _threat_ips: set[str] = set()
 _abuse_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
-_ABUSE_TTL = 86400  # 24 hours
+_reported_cache: dict[str, float] = {}            # ip -> last_reported_at
+_ABUSE_TTL = 86400   # 24 hours per-IP check cache
+_REPORT_TTL = 900    # 15 min minimum between reports for same IP (AbuseIPDB TOS)
+
+_REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
 
 def is_known_threat(ip: str) -> bool:
@@ -58,12 +62,52 @@ def check_abuseipdb(ip: str) -> tuple[bool, dict]:
     return False, {}
 
 
+async def report_to_abuseipdb(ip: str, event_type: str) -> None:
+    """Auto-report attacking IPs back to AbuseIPDB (contributes to community blocklist)."""
+    if not ABUSEIPDB_API_KEY or event_type not in _REPORTABLE_TYPES:
+        return
+    now = time.time()
+    if ip in _reported_cache and now - _reported_cache[ip] < _REPORT_TTL:
+        return
+    _reported_cache[ip] = now  # mark before the call to prevent race duplicates
+
+    if event_type == "cowrie.command.input":
+        categories, comment = "22", "SSH intrusion — commands executed in Cowrie honeypot"
+    elif event_type == "cowrie.login.success":
+        categories, comment = "22", "SSH unauthorized access via Cowrie honeypot"
+    else:
+        categories, comment = "18,22", "SSH brute-force against Cowrie honeypot"
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.post(
+                f"{ABUSEIPDB_BASE}/report",
+                headers={"Key": ABUSEIPDB_API_KEY, "Accept": "application/json"},
+                data={"ip": ip, "categories": categories, "comment": comment},
+            )
+            if r.status_code == 200:
+                logger.info(f"Reported {ip} to AbuseIPDB ({event_type})")
+            else:
+                logger.warning(f"AbuseIPDB report failed for {ip}: HTTP {r.status_code} {r.text[:100]}")
+    except Exception as e:
+        logger.warning(f"AbuseIPDB report error for {ip}: {e}")
+
+
 async def start_threat_poller():
+    # Pull blacklist immediately at startup, then every 6 hours
+    await _refresh_blacklist()
+    cycles = 0
     while True:
         try:
             await _refresh()
         except Exception as e:
             logger.error(f"Threat poller error: {e}")
+        cycles += 1
+        if cycles % 72 == 0:  # 72 × 5 min = 6 hours
+            try:
+                await _refresh_blacklist()
+            except Exception as e:
+                logger.error(f"Blacklist refresh error: {e}")
         await asyncio.sleep(300)
 
 
@@ -100,3 +144,24 @@ async def _refresh():
     _threat_ips.clear()
     _threat_ips.update(ips)
     logger.info(f"Threat intel refreshed: {len(_threat_ips)} IPs")
+
+
+async def _refresh_blacklist():
+    """Download AbuseIPDB high-confidence blacklist and merge into threat set."""
+    if not ABUSEIPDB_API_KEY:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.get(
+                f"{ABUSEIPDB_BASE}/blacklist",
+                headers={"Key": ABUSEIPDB_API_KEY, "Accept": "text/plain"},
+                params={"confidenceMinimum": 90},
+            )
+            if r.status_code == 200:
+                new_ips = {line.strip() for line in r.text.splitlines() if line.strip()}
+                _threat_ips.update(new_ips)
+                logger.info(f"AbuseIPDB blacklist: {len(new_ips)} IPs merged into threat set")
+            else:
+                logger.warning(f"AbuseIPDB blacklist HTTP {r.status_code}")
+    except Exception as e:
+        logger.warning(f"AbuseIPDB blacklist fetch failed: {e}")

@@ -26,7 +26,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
-| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check, 24h cache) |
+| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check with 24h cache, blacklist polled every 6h, auto-reports attackers) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -40,7 +40,7 @@ threatmap/
 │   ├── main.py              FastAPI app, WebSocket broadcaster, REST endpoints
 │   ├── kafka_consumer.py    Kafka consumer, GeoIP enrichment, MongoDB persistence
 │   ├── geoip.py             MaxMind GeoLite2 wrapper
-│   ├── otx_poller.py        OTX + Feodo bulk poller + AbuseIPDB per-IP check with 24h cache
+│   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP check with 24h cache; auto-reports attackers
 │   ├── db.py                Async MongoDB connection (Motor)
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -117,7 +117,8 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 | Endpoint | Description |
 |---|---|
 | `GET /api/events/recent?limit=200` | Last N enriched attack events from MongoDB |
-| `GET /api/stats` | Total event count + top 10 attacker countries |
+| `GET /api/stats` | Total event count + top 10 attacker countries + top 10 attacker IPs |
+| `GET /api/ip/{ip}/stats` | Per-IP history: total attacks, first/last seen, event type breakdown |
 | `WS /ws/events` | Live event stream (JSON, one event per message) |
 | `GET /healthz` | Liveness probe |
 

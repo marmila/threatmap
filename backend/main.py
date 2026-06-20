@@ -67,14 +67,54 @@ async def recent_events(limit: int = 200):
 async def stats():
     db = get_db()
     total = await db.events.count_documents({})
-    pipeline = [
+
+    country_pipeline = [
         {"$group": {"_id": "$src_country", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
         {"$limit": 10},
         {"$project": {"country": "$_id", "count": 1, "_id": 0}},
     ]
-    top_countries = await db.events.aggregate(pipeline).to_list(10)
-    return {"total": total, "top_countries": top_countries}
+    ip_pipeline = [
+        {"$group": {
+            "_id": "$src_ip",
+            "count": {"$sum": 1},
+            "country": {"$first": "$src_country"},
+            "known_threat": {"$max": "$known_threat"},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"ip": "$_id", "count": 1, "country": 1, "known_threat": 1, "_id": 0}},
+    ]
+
+    top_countries, top_ips = await asyncio.gather(
+        db.events.aggregate(country_pipeline).to_list(10),
+        db.events.aggregate(ip_pipeline).to_list(10),
+    )
+    return {"total": total, "top_countries": top_countries, "top_ips": top_ips}
+
+
+@app.get("/api/ip/{ip}/stats")
+async def ip_stats(ip: str):
+    db = get_db()
+    pipeline = [
+        {"$match": {"src_ip": ip}},
+        {"$group": {
+            "_id": "$event_type",
+            "count": {"$sum": 1},
+            "first_seen": {"$min": "$timestamp"},
+            "last_seen": {"$max": "$timestamp"},
+        }},
+        {"$sort": {"count": -1}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(20)
+    if not results:
+        return {"total_attacks": 0, "first_seen": None, "last_seen": None, "event_breakdown": []}
+    return {
+        "total_attacks": sum(r["count"] for r in results),
+        "first_seen": min(r["first_seen"] for r in results),
+        "last_seen": max(r["last_seen"] for r in results),
+        "event_breakdown": [{"event_type": r["_id"], "count": r["count"]} for r in results],
+    }
 
 
 @app.get("/healthz")

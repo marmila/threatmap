@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 const EVENT_LABELS = {
   'cowrie.login.success':   'LOGIN SUCCESS',
@@ -105,11 +105,22 @@ function LinkRow({ label, href, value, valueStyle }) {
 }
 
 export default function EventDetail({ event, onClose }) {
+  const [ipStats, setIpStats] = useState(null)
+
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
+
+  useEffect(() => {
+    if (!event?.src_ip) { setIpStats(null); return }
+    setIpStats(null)
+    fetch(`/api/ip/${event.src_ip}/stats`)
+      .then(r => r.json())
+      .then(setIpStats)
+      .catch(() => {})
+  }, [event?.src_ip])
 
   if (!event) return null
 
@@ -153,6 +164,32 @@ export default function EventDetail({ event, onClose }) {
               : null
           } />
         </div>
+
+        {/* ATTACKER HISTORY — lazy loaded from MongoDB */}
+        {ipStats && ipStats.total_attacks > 0 && (
+          <div style={s.section}>
+            <div style={s.sectionLabel}>ATTACKER HISTORY</div>
+            <Row
+              label="TOTAL ATTACKS"
+              value={ipStats.total_attacks.toLocaleString()}
+              valueStyle={{ color: '#ef4444', fontWeight: 'bold' }}
+            />
+            {ipStats.first_seen && (
+              <Row label="FIRST SEEN" value={new Date(ipStats.first_seen).toLocaleDateString()} />
+            )}
+            {ipStats.last_seen && (
+              <Row label="LAST SEEN" value={new Date(ipStats.last_seen).toLocaleDateString()} />
+            )}
+            {ipStats.event_breakdown?.slice(0, 4).map(b => (
+              <Row
+                key={b.event_type}
+                label={b.event_type.replace('cowrie.', '')}
+                value={b.count.toLocaleString()}
+                valueStyle={s.dimVal}
+              />
+            ))}
+          </div>
+        )}
 
         {/* ATTACK — only render if there's something meaningful */}
         {hasAttackDetail && (

@@ -40,6 +40,7 @@ export default function App() {
   const [total, setTotal] = useState(0)
   const [topCountries, setTopCountries] = useState([])
   const [connected, setConnected] = useState(false)
+  const [topIps, setTopIps] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -84,6 +85,7 @@ export default function App() {
         const stats = await stRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
+        setTopIps(stats.top_ips || [])
         setLiveEvents(events.slice(0, 50))
         setArcs(events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` })))
       } catch {}
@@ -100,6 +102,7 @@ export default function App() {
         events={liveEvents}
         total={total}
         topCountries={topCountries}
+        topIps={topIps}
         connected={connected}
       />
     </>

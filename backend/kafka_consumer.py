@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Callable, Awaitable
 
 from geoip import lookup
-from otx_poller import is_known_threat, check_abuseipdb
+from otx_poller import is_known_threat, check_abuseipdb, report_to_abuseipdb
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,17 @@ KAFKA_USERNAME = os.getenv("KAFKA_USERNAME", "")
 KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD", "")
 HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
+
+# SSH negotiation noise — not useful for threat visualization
+_SKIP_EVENT_TYPES = {
+    "cowrie.session.params",
+    "cowrie.client.lex",
+    "cowrie.client.size",
+    "cowrie.client.var",
+    "cowrie.client.fingerprint",
+    "cowrie.client.version",
+    "cowrie.log.closed",  # old duplicate of cowrie.session.closed
+}
 
 
 async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
@@ -53,6 +64,7 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
             for msg in consumer:
                 event = _enrich(msg.value)
                 if event:
+                    asyncio.run_coroutine_threadsafe(report_to_abuseipdb(event["src_ip"], event["event_type"]), loop)
                     asyncio.run_coroutine_threadsafe(broadcast(event), loop)
                     asyncio.run_coroutine_threadsafe(_persist(event), loop)
         except Exception as e:
@@ -63,6 +75,8 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
 def _enrich(raw: dict) -> dict | None:
     src_ip = raw.get("src_ip")
     if not src_ip:
+        return None
+    if raw.get("eventid") in _SKIP_EVENT_TYPES:
         return None
 
     geo = lookup(src_ip)
