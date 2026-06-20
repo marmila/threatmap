@@ -2,7 +2,7 @@
 
 ![ThreatMap Architecture](threatmap-architecture.png)
 
-Two Oracle Cloud VMs running Cowrie SSH honeypots, shipping attack events into the homelab via WireGuard → Fluentd → Kafka.
+Two Oracle Cloud VMs running Cowrie SSH + Telnet honeypots, shipping attack events into the homelab via WireGuard → Fluentd → Kafka.
 
 **VMs:**
 - `honeypot-eu-01` — VM.Standard.E2.1.Micro, x86_64, Ubuntu 22.04, `eu-milan-1`
@@ -72,29 +72,37 @@ The VPN IP assigned by PiVPN (e.g. `10.8.0.x`) will be in the wg0.conf.
 
 ---
 
-## Part 2 — Oracle Cloud: Open Port 22 for Cowrie
+## Part 2 — Oracle Cloud: Open Ports for Cowrie
 
 By default Oracle Cloud blocks all inbound traffic except SSH.  
-You need to open TCP port 22 in the VCN Security List **and** on the VM's iptables.
+You need to open TCP ports 22 and 23 in the VCN Security List **and** on the VM's iptables.
 
 ### 2.1 Oracle Cloud Console — Security List
 
 1. Go to **Networking → Virtual Cloud Networks → your VCN → Security Lists → Default Security List**
-2. Add an **Ingress Rule**:
+2. Add an **Ingress Rule** for SSH honeypot:
    - Source: `0.0.0.0/0`
    - Protocol: TCP
    - Destination Port: `22`
-   - Description: `Cowrie honeypot`
+   - Description: `Cowrie SSH honeypot`
+3. Add a second **Ingress Rule** for Telnet honeypot:
+   - Source: `0.0.0.0/0`
+   - Protocol: TCP
+   - Destination Port: `23`
+   - Description: `Cowrie Telnet honeypot`
 
-> Port 22 may already be open (for SSH). If so, it's already done.
+> Port 22 may already be open. Port 23 is the new one to add.
 
 ### 2.2 VM iptables
 
 Oracle Ubuntu images have iptables rules that override the security list. Add the rules:
 
 ```bash
-# Allow inbound TCP 22 (Cowrie)
+# Allow inbound TCP 22 (Cowrie SSH)
 sudo iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+
+# Allow inbound TCP 23 (Cowrie Telnet)
+sudo iptables -I INPUT -p tcp --dport 23 -j ACCEPT
 
 # Allow inbound TCP 2222 (real SSH after we move it)
 sudo iptables -I INPUT -p tcp --dport 2222 -j ACCEPT
@@ -142,17 +150,23 @@ mkdir -p /home/ubuntu/cowrie/var/log/cowrie
 mkdir -p /home/ubuntu/cowrie/var/lib/cowrie
 ```
 
-### 4.2 iptables redirect: port 22 → Cowrie on 2223
+### 4.2 iptables redirects: SSH and Telnet → Cowrie
 
-Real SSH stays on 2222. External port 22 gets redirected to Cowrie.
+Real SSH stays on 2222. External ports 22 and 23 get redirected to Cowrie.
 
 ```bash
+# SSH: external 22 → Cowrie on 2223
 sudo iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2223
+
+# Telnet: external 23 → Cowrie on 2323
+sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
+
 sudo netfilter-persistent save
 ```
 
 Port layout:
-- External `22` → iptables → Cowrie container on `2223`
+- External `22` → iptables → Cowrie SSH listener on `2223`
+- External `23` → iptables → Cowrie Telnet listener on `2323`
 - Real SSH on `2222` (reachable via WireGuard or direct)
 
 ### 4.3 Create custom Cowrie config
@@ -171,6 +185,10 @@ hostname = webserver-eu-01
 
 [ssh]
 listen_endpoints = tcp:2223:interface=0.0.0.0
+
+[telnet]
+enabled = true
+listen_endpoints = tcp:2323:interface=0.0.0.0
 EOF
 ```
 
@@ -182,10 +200,14 @@ hostname = webserver-eu-02
 
 [ssh]
 listen_endpoints = tcp:2223:interface=0.0.0.0
+
+[telnet]
+enabled = true
+listen_endpoints = tcp:2323:interface=0.0.0.0
 EOF
 ```
 
-> `listen_endpoints` **must** be under `[ssh]`, not `[honeypot]` — putting it under `[honeypot]` is silently ignored.
+> `listen_endpoints` **must** be under the protocol section (`[ssh]` or `[telnet]`), not `[honeypot]` — putting it under `[honeypot]` is silently ignored.
 
 ### 4.4 Run Cowrie
 
@@ -320,9 +342,11 @@ All steps above apply identically to both VMs. The only differences:
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
-| `22` | TCP | Cowrie (via iptables redirect → 2223) |
+| `22` | TCP | Cowrie SSH (via iptables redirect → 2223) |
+| `23` | TCP | Cowrie Telnet (via iptables redirect → 2323) |
 | `2222` | TCP | Real SSH daemon |
-| `2223` | TCP | Cowrie listener (internal) |
+| `2223` | TCP | Cowrie SSH listener (internal) |
+| `2323` | TCP | Cowrie Telnet listener (internal) |
 | `51820` | UDP | WireGuard client (outbound to homelab) |
 
 ---
