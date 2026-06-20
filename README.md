@@ -1,8 +1,14 @@
 # ThreatMap
 
-Real-time global attack visualization — SSH honeypots on Oracle Cloud feed live attack events, enriched with geolocation and threat intelligence, and rendered as animated arcs on a 3D globe.
+Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live attack events, enriched with geolocation and threat intelligence, and rendered as animated arcs on a 3D globe.
 
 ![Architecture](docs/threatmap-architecture.png)
+
+## Screenshots
+
+![ThreatMap Globe](docs/threatmap-screen.png)
+
+![Attack Detail Modal](docs/threatmap-attack-detail.png)
 
 ---
 
@@ -27,7 +33,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
 | Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check with 24h cache, blacklist polled every 6h, auto-reports attackers) |
-| Host intel | Shodan (open ports, CVEs, tags, org, OS — per-IP with 7-day cache, Membership plan) |
+| Host intel | Shodan (open ports, CVEs, tags, org, OS - per-IP with 7-day cache, Membership plan) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -75,15 +81,15 @@ threatmap/
 | `KAFKA_BOOTSTRAP` | `kafka-kafka-bootstrap.kafka.svc.cluster.local:9092` | Kafka bootstrap servers |
 | `KAFKA_TOPIC` | `attack-events` | Topic to consume |
 | `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | `SASL_PLAINTEXT` or `SASL_SSL` for auth |
-| `KAFKA_SASL_MECHANISM` | — | `SCRAM-SHA-512` when using SASL |
-| `KAFKA_USERNAME` | — | Kafka SCRAM username |
-| `KAFKA_PASSWORD` | — | Kafka SCRAM password |
+| `KAFKA_SASL_MECHANISM` | - | `SCRAM-SHA-512` when using SASL |
+| `KAFKA_USERNAME` | - | Kafka SCRAM username |
+| `KAFKA_PASSWORD` | - | Kafka SCRAM password |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGO_DB` | `threatmap` | Database name |
 | `GEOIP_DB_PATH` | `/data/GeoLite2-City.mmdb` | Path to MaxMind mmdb file |
-| `OTX_API_KEY` | — | AlienVault OTX API key (optional, enriches known-threat flags) |
-| `ABUSEIPDB_API_KEY` | — | AbuseIPDB API key — per-IP confidence score, score ≥50 sets known_threat=true |
-| `SHODAN_API_KEY` | — | Shodan Membership API key — per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
+| `OTX_API_KEY` | - | AlienVault OTX API key (optional, enriches known-threat flags) |
+| `ABUSEIPDB_API_KEY` | - | AbuseIPDB API key - per-IP confidence score, score ≥50 sets known_threat=true |
+| `SHODAN_API_KEY` | - | Shodan Membership API key - per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
 
@@ -97,9 +103,9 @@ threatmap/
 
 ---
 
-## Threat intelligence — how it works
+## Threat intelligence - how it works
 
-**Important:** OTX, Feodo, and AbuseIPDB are **enrichment feeds, not event sources**. They do not generate arcs on the globe. The only event source is the Cowrie honeypots — an arc appears only when a real SSH connection hits them.
+**Important:** OTX, Feodo, and AbuseIPDB are **enrichment feeds, not event sources**. They do not generate arcs on the globe. The only event source is the Cowrie honeypots - an arc appears only when a real SSH connection hits them.
 
 The feeds act as lookup tables to classify attackers:
 
@@ -107,9 +113,9 @@ The feeds act as lookup tables to classify attackers:
 |---|---|---|
 | **AlienVault OTX** | C2 server IPs from subscribed threat intel pulses | `known_threat=true` → red dot + KNOWN THREAT banner, *only if that IP also attacks the honeypot* |
 | **Abuse.ch Feodo Tracker** | Botnet C2 IPs (Emotet, QakBot, TrickBot) | Same as OTX |
-| **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, polled every 6h | Same — flags IP as known threat |
+| **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, polled every 6h | Same - flags IP as known threat |
 | **AbuseIPDB check (per-IP)** | Real-time reputation score for each attacker IP | Score bar, total reports, distinct reporters, ISP in the detail modal |
-| **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect — contributes to the public blocklist |
+| **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect - contributes to the public blocklist |
 | **Shodan** | Open ports, known CVEs, tags (malware/tor/self-signed/etc.), org, OS, hostname for each attacker IP | SHODAN section in detail modal; 7-day per-IP cache (Membership = 100 credits/month) |
 
 OTX and Feodo focus on C2 infrastructure; AbuseIPDB covers a broader range of attack patterns and tends to produce the most matches against honeypot traffic.
