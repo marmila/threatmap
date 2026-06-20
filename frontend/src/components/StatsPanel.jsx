@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import EventDetail from './EventDetail.jsx'
 
+const eventColor = (t) => {
+  if (!t) return '#fbbf24'
+  if (t.includes('login.success')) return '#ef4444'
+  if (t.includes('command.input')) return '#f97316'
+  if (t.includes('session.connect') || t.includes('log.closed')) return '#64748b'
+  return '#fbbf24'
+}
+
 const s = {
   panel: {
     position: 'fixed', top: 0, right: 0, width: '280px', height: '100vh',
@@ -80,7 +88,7 @@ export default function StatsPanel({ events, total, topCountries, connected }) {
       </div>
       <div style={s.feed}>
         {events.slice(0, 30).map((e, i) => (
-          <div key={i} style={{ ...s.event, ...(e.known_threat ? s.eventThreat : {}), cursor: 'pointer' }}
+          <div key={i} style={{ ...s.event, borderLeft: `2px solid ${eventColor(e.event_type)}`, cursor: 'pointer' }}
             onClick={() => setSelected(e)}>
             <div style={s.ip}>
               {e.src_ip}

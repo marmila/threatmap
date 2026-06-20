@@ -1,5 +1,29 @@
 import { useEffect } from 'react'
 
+const EVENT_LABELS = {
+  'cowrie.login.success':   'LOGIN SUCCESS',
+  'cowrie.login.failed':    'LOGIN ATTEMPT',
+  'cowrie.session.connect': 'CONNECTION',
+  'cowrie.log.closed':      'SESSION CLOSED',
+  'cowrie.command.input':   'COMMAND EXECUTED',
+}
+
+const EVENT_BADGE = {
+  'cowrie.login.success':   { bg: '#450a0a', color: '#ef4444' },
+  'cowrie.login.failed':    { bg: '#3d2700', color: '#fbbf24' },
+  'cowrie.command.input':   { bg: '#431407', color: '#f97316' },
+  'cowrie.session.connect': { bg: '#0f172a', color: '#64748b' },
+  'cowrie.log.closed':      { bg: '#0f172a', color: '#64748b' },
+}
+const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
+
+const abuseColor = (score) => {
+  if (score >= 75) return '#ef4444'
+  if (score >= 50) return '#f97316'
+  if (score >= 25) return '#fbbf24'
+  return '#4ade80'
+}
+
 const s = {
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
@@ -16,7 +40,7 @@ const s = {
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: '12px',
   },
   title: { color: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px' },
   closeBtn: {
@@ -32,10 +56,16 @@ const s = {
   key: { color: '#4a5568', fontSize: '10px', flexShrink: 0 },
   val: { color: '#f1f5f9', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' },
   ip: { color: '#60a5fa', fontSize: '10px', textAlign: 'right' },
-  threat: {
+  badge: {
+    display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
+    fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '14px',
+  },
+  scoreBar: { height: '3px', background: '#1e2535', borderRadius: '2px', margin: '2px 0 6px' },
+  scoreBarFill: { height: '100%', borderRadius: '2px', transition: 'width 0.5s' },
+  threatBadge: {
     display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
     background: '#450a0a', color: '#f87171',
-    fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '12px',
+    fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px',
   },
   password: { color: '#fb923c', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' },
 }
@@ -58,9 +88,9 @@ export default function EventDetail({ event, onClose }) {
 
   if (!event) return null
 
-  const time = event.timestamp
-    ? new Date(event.timestamp).toLocaleString()
-    : '—'
+  const time = event.timestamp ? new Date(event.timestamp).toLocaleString() : '—'
+  const badge = EVENT_BADGE[event.event_type] || DEFAULT_BADGE
+  const label = EVENT_LABELS[event.event_type] || event.event_type
 
   return (
     <>
@@ -71,9 +101,9 @@ export default function EventDetail({ event, onClose }) {
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {event.known_threat && (
-          <div style={s.threat}>⚠ KNOWN THREAT ACTOR</div>
-        )}
+        <div style={{ ...s.badge, background: badge.bg, color: badge.color }}>
+          {label}
+        </div>
 
         <div style={s.section}>
           <div style={s.sectionLabel}>SOURCE</div>
@@ -92,10 +122,35 @@ export default function EventDetail({ event, onClose }) {
 
         <div style={s.section}>
           <div style={s.sectionLabel}>ATTACK</div>
-          <Row label="TYPE" value={event.event_type} />
           <Row label="USERNAME" value={event.username} />
           <Row label="PASSWORD" value={event.password} valueStyle={s.password} />
+          <Row label="RAW TYPE" value={event.event_type} />
         </div>
+
+        {(event.abuse_score > 0 || event.known_threat) && (
+          <div style={s.section}>
+            <div style={s.sectionLabel}>THREAT INTEL</div>
+            {event.abuse_score > 0 && (
+              <>
+                <Row
+                  label="ABUSEIPDB"
+                  value={`${event.abuse_score}/100`}
+                  valueStyle={{ color: abuseColor(event.abuse_score) }}
+                />
+                <div style={s.scoreBar}>
+                  <div style={{
+                    ...s.scoreBarFill,
+                    width: `${event.abuse_score}%`,
+                    background: abuseColor(event.abuse_score),
+                  }} />
+                </div>
+              </>
+            )}
+            {event.known_threat && (
+              <div style={s.threatBadge}>⚠ KNOWN THREAT ACTOR</div>
+            )}
+          </div>
+        )}
 
         <div style={s.section}>
           <div style={s.sectionLabel}>SENSOR</div>

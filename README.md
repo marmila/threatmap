@@ -12,7 +12,8 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon) and cross-references AlienVault OTX + Abuse.ch threat feeds
 - React frontend renders animated attack arcs on a 3D globe in real time via WebSocket
-- Known threat IPs glow red, unknown attackers amber
+- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect/closed=grey
+- Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner in detail modal
 - Click any event in the live feed for full attack detail (credentials attempted, honeypot sensor, geo coords)
 
 ---
@@ -25,7 +26,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
-| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (free, polled every 5 min) |
+| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check, 24h cache) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -39,7 +40,7 @@ threatmap/
 │   ├── main.py              FastAPI app, WebSocket broadcaster, REST endpoints
 │   ├── kafka_consumer.py    Kafka consumer, GeoIP enrichment, MongoDB persistence
 │   ├── geoip.py             MaxMind GeoLite2 wrapper
-│   ├── otx_poller.py        OTX + ThreatFox + Feodo threat feed poller
+│   ├── otx_poller.py        OTX + Feodo bulk poller + AbuseIPDB per-IP check with 24h cache
 │   ├── db.py                Async MongoDB connection (Motor)
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -79,6 +80,7 @@ threatmap/
 | `MONGO_DB` | `threatmap` | Database name |
 | `GEOIP_DB_PATH` | `/data/GeoLite2-City.mmdb` | Path to MaxMind mmdb file |
 | `OTX_API_KEY` | — | AlienVault OTX API key (optional, enriches known-threat flags) |
+| `ABUSEIPDB_API_KEY` | — | AbuseIPDB API key — per-IP confidence score, score ≥50 sets known_threat=true |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
 
@@ -99,23 +101,14 @@ All secrets are stored in HashiCorp Vault (KV v2 mount: `secret/`) and synced to
 | Vault path | Keys | Description |
 |---|---|---|
 | `secret/threatmap/otx` | `otx_api_key` | AlienVault OTX API key (otx.alienvault.com) |
+| `secret/threatmap/abuseipdb` | `api_key` | AbuseIPDB API key (abuseipdb.com → API) |
 | `secret/threatmap/maxmind` | `license_key`, `account_id` | MaxMind account credentials for GeoLite2 download |
 | `secret/threatmap/mongodb` | `password` | MongoDB `threatmap` user password (auto-generated if absent) |
 | `secret/kafka/threatmap` | `username`, `password` | Kafka SCRAM-SHA-512 credentials for consumer + producer (auto-generated if absent) |
 
 The `kafka/threatmap` password is also written to the Kubernetes secret `threatmap-backend-kafka-secret` in the `kafka` namespace, which Strimzi reads to provision the `threatmap-backend` KafkaUser.
 
-### Credentials file format
-
-The Stage 5 Ansible playbook reads from `~/.secrets/threatmap-credentials.ini`:
-
-```ini
-otx_api_key = <your-alientvault-otx-key>
-maxmind_license_key = <your-maxmind-license-key>
-maxmind_account_id = <your-maxmind-numeric-account-id>
-```
-
-MongoDB and Kafka passwords are auto-generated on first run and preserved on subsequent runs.
+The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and only prompts interactively if the key is not found. MongoDB and Kafka passwords are auto-generated on first run and preserved on subsequent runs. No credentials file is needed.
 
 ---
 
@@ -147,9 +140,19 @@ Each event (WebSocket or REST) contains:
   "username": "root",
   "password": "123456",
   "honeypot": "honeypot-eu-01",
-  "known_threat": false
+  "known_threat": false,
+  "abuse_score": 42
 }
 ```
+
+### Event type color scheme
+
+| `event_type` | Arc color | Meaning |
+|---|---|---|
+| `cowrie.login.success` | Red | Attacker got past authentication |
+| `cowrie.login.failed` | Amber | Brute-force attempt |
+| `cowrie.command.input` | Orange | Active session, commands executed |
+| `cowrie.session.connect` / `cowrie.log.closed` | Grey | Connection noise, not interesting |
 
 ---
 

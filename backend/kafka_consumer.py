@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Callable, Awaitable
 
 from geoip import lookup
-from otx_poller import is_known_threat
+from otx_poller import is_known_threat, check_abuseipdb
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,8 @@ def _enrich(raw: dict) -> dict | None:
     if not geo:
         return None
 
+    abuse_threat, abuse_score = check_abuseipdb(src_ip)
+
     return {
         "timestamp": raw.get("timestamp", datetime.now(timezone.utc).isoformat()),
         "src_ip": src_ip,
@@ -83,7 +85,8 @@ def _enrich(raw: dict) -> dict | None:
         "username": raw.get("username"),
         "password": raw.get("password"),
         "honeypot": raw.get("honeypot_host"),
-        "known_threat": is_known_threat(src_ip),
+        "known_threat": is_known_threat(src_ip) or abuse_threat,
+        "abuse_score": abuse_score,
     }
 
 
