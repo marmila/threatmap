@@ -26,7 +26,7 @@ function Legend() {
       </div>
       {LEGEND_ITEMS.map(({ color, label }) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-          <div style={{ width: '14px', height: '2px', background: color, borderRadius: '1px', flexShrink: 0 }} />
+          <div style={{ width: '9px', height: '9px', background: color, borderRadius: '2px', flexShrink: 0 }} />
           <span style={{ color: '#94a3b8', fontSize: '10px' }}>{label}</span>
         </div>
       ))}
