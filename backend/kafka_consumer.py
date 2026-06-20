@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Callable, Awaitable
 
 from geoip import lookup
-from otx_poller import is_known_threat, check_abuseipdb, report_to_abuseipdb
+from otx_poller import is_known_threat, check_abuseipdb, check_shodan, report_to_abuseipdb
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,7 @@ def _enrich(raw: dict) -> dict | None:
         return None
 
     abuse_threat, abuse_data = check_abuseipdb(src_ip)
+    shodan_data = check_shodan(src_ip)
 
     return {
         "timestamp": raw.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -109,6 +110,13 @@ def _enrich(raw: dict) -> dict | None:
         "abuse_isp": abuse_data.get("isp"),
         "abuse_usage_type": abuse_data.get("usage_type"),
         "abuse_is_tor": abuse_data.get("is_tor", False),
+        "shodan_ports": shodan_data.get("ports", []),
+        "shodan_tags": shodan_data.get("tags", []),
+        "shodan_vulns": shodan_data.get("vulns", []),
+        "shodan_org": shodan_data.get("org"),
+        "shodan_hostnames": shodan_data.get("hostnames", []),
+        "shodan_os": shodan_data.get("os"),
+        "shodan_last_update": shodan_data.get("last_update"),
     }
 
 

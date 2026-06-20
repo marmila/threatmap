@@ -10,7 +10,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 
 - Cowrie SSH honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
-- Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon) and cross-references AlienVault OTX + Abuse.ch threat feeds
+- Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
 - React frontend renders animated attack arcs on a 3D globe in real time via WebSocket
 - Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect/closed=grey
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner in detail modal
@@ -27,6 +27,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
 | Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check with 24h cache, blacklist polled every 6h, auto-reports attackers) |
+| Host intel | Shodan (open ports, CVEs, tags, org, OS — per-IP with 7-day cache, Membership plan) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -40,7 +41,7 @@ threatmap/
 │   ├── main.py              FastAPI app, WebSocket broadcaster, REST endpoints
 │   ├── kafka_consumer.py    Kafka consumer, GeoIP enrichment, MongoDB persistence
 │   ├── geoip.py             MaxMind GeoLite2 wrapper
-│   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP check with 24h cache; auto-reports attackers
+│   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP AbuseIPDB check (24h cache); Shodan host lookup (7d cache); auto-reports attackers
 │   ├── db.py                Async MongoDB connection (Motor)
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -81,6 +82,7 @@ threatmap/
 | `GEOIP_DB_PATH` | `/data/GeoLite2-City.mmdb` | Path to MaxMind mmdb file |
 | `OTX_API_KEY` | — | AlienVault OTX API key (optional, enriches known-threat flags) |
 | `ABUSEIPDB_API_KEY` | — | AbuseIPDB API key — per-IP confidence score, score ≥50 sets known_threat=true |
+| `SHODAN_API_KEY` | — | Shodan Membership API key — per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
 
@@ -107,6 +109,7 @@ The feeds act as lookup tables to classify attackers:
 | **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, polled every 6h | Same — flags IP as known threat |
 | **AbuseIPDB check (per-IP)** | Real-time reputation score for each attacker IP | Score bar, total reports, distinct reporters, ISP in the detail modal |
 | **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect — contributes to the public blocklist |
+| **Shodan** | Open ports, known CVEs, tags (malware/tor/self-signed/etc.), org, OS, hostname for each attacker IP | SHODAN section in detail modal; 7-day per-IP cache (Membership = 100 credits/month) |
 
 OTX and Feodo focus on C2 infrastructure; AbuseIPDB covers a broader range of attack patterns and tends to produce the most matches against honeypot traffic.
 
@@ -120,6 +123,7 @@ All secrets are stored in HashiCorp Vault (KV v2 mount: `secret/`) and synced to
 |---|---|---|
 | `secret/threatmap/otx` | `otx_api_key` | AlienVault OTX API key (otx.alienvault.com) |
 | `secret/threatmap/abuseipdb` | `api_key` | AbuseIPDB API key (abuseipdb.com → API) |
+| `secret/threatmap/shodan` | `api_key` | Shodan Membership API key (account.shodan.io) |
 | `secret/threatmap/maxmind` | `license_key`, `account_id` | MaxMind account credentials for GeoLite2 download |
 | `secret/threatmap/mongodb` | `password` | MongoDB `threatmap` user password (auto-generated if absent) |
 | `secret/kafka/threatmap` | `username`, `password` | Kafka SCRAM-SHA-512 credentials for consumer + producer (auto-generated if absent) |
@@ -168,7 +172,14 @@ Each event (WebSocket or REST) contains:
   "abuse_last_reported": "2026-06-20T08:00:00+00:00",
   "abuse_isp": "Consortium GARR",
   "abuse_usage_type": "Data Center/Web Hosting/Transit",
-  "abuse_is_tor": false
+  "abuse_is_tor": false,
+  "shodan_ports": [22, 80, 443],
+  "shodan_tags": ["self-signed", "malware"],
+  "shodan_vulns": ["CVE-2021-44228", "CVE-2017-0144"],
+  "shodan_org": "DigitalOcean LLC",
+  "shodan_hostnames": ["scanner.example.com"],
+  "shodan_os": null,
+  "shodan_last_update": "2026-06-15T12:00:00"
 }
 ```
 

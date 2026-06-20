@@ -11,12 +11,16 @@ OTX_API_KEY = os.getenv("OTX_API_KEY", "")
 OTX_BASE = "https://otx.alienvault.com/api/v1"
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "")
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
+SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "")
+SHODAN_BASE = "https://api.shodan.io"
 
 _threat_ips: set[str] = set()
-_abuse_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
-_reported_cache: dict[str, float] = {}            # ip -> last_reported_at
-_ABUSE_TTL = 86400   # 24 hours per-IP check cache
-_REPORT_TTL = 900    # 15 min minimum between reports for same IP (AbuseIPDB TOS)
+_abuse_cache: dict[str, tuple[dict, float]] = {}   # ip -> (data, checked_at_epoch)
+_shodan_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
+_reported_cache: dict[str, float] = {}             # ip -> last_reported_at
+_ABUSE_TTL = 86400    # 24 hours per-IP AbuseIPDB cache
+_SHODAN_TTL = 604800  # 7 days — Shodan membership = 100 credits/month, conserve them
+_REPORT_TTL = 900     # 15 min minimum between reports for same IP (AbuseIPDB TOS)
 
 _REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
@@ -60,6 +64,47 @@ def check_abuseipdb(ip: str) -> tuple[bool, dict]:
     except Exception as e:
         logger.warning(f"AbuseIPDB check failed for {ip}: {e}")
     return False, {}
+
+
+def check_shodan(ip: str) -> dict:
+    """Returns Shodan host data dict. Caches per IP for 7 days to conserve credits.
+
+    data keys: ports, tags, vulns, org, isp, asn, hostnames, os, last_update
+    """
+    if not SHODAN_API_KEY:
+        return {}
+    now = time.time()
+    if ip in _shodan_cache:
+        data, checked_at = _shodan_cache[ip]
+        if now - checked_at < _SHODAN_TTL:
+            return data
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.get(
+                f"{SHODAN_BASE}/shodan/host/{ip}",
+                params={"key": SHODAN_API_KEY},
+            )
+            if r.status_code == 200:
+                d = r.json()
+                data = {
+                    "ports": sorted(d.get("ports", [])),
+                    "tags": d.get("tags", []),
+                    "vulns": sorted(d.get("vulns", {}).keys()),
+                    "org": d.get("org"),
+                    "isp": d.get("isp"),
+                    "asn": d.get("asn"),
+                    "hostnames": d.get("hostnames", []),
+                    "os": d.get("os"),
+                    "last_update": d.get("last_update"),
+                }
+                _shodan_cache[ip] = (data, now)
+                return data
+            elif r.status_code == 404:
+                # IP not in Shodan — cache empty result to avoid burning credits on re-check
+                _shodan_cache[ip] = ({}, now)
+    except Exception as e:
+        logger.warning(f"Shodan check failed for {ip}: {e}")
+    return {}
 
 
 async def report_to_abuseipdb(ip: str, event_type: str) -> None:

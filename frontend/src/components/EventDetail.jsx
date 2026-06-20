@@ -253,6 +253,38 @@ export default function EventDetail({ event, onClose }) {
           </div>
         )}
 
+        {/* SHODAN */}
+        {(event.shodan_ports?.length > 0 || event.shodan_tags?.length > 0 || event.shodan_vulns?.length > 0 || event.shodan_org) && (
+          <div style={s.section}>
+            <div style={s.sectionLabel}>SHODAN</div>
+            {event.shodan_org && (
+              <Row label="ORG" value={event.shodan_org} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_os && (
+              <Row label="OS" value={event.shodan_os} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_ports?.length > 0 && (
+              <Row label="OPEN PORTS" value={event.shodan_ports.slice(0, 12).join(', ')} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_hostnames?.length > 0 && (
+              <Row label="HOSTNAME" value={event.shodan_hostnames[0]} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_tags?.length > 0 && (
+              <Row label="TAGS" value={event.shodan_tags.join(', ')} valueStyle={{ color: '#f97316', fontSize: '10px', textAlign: 'right' }} />
+            )}
+            {event.shodan_vulns?.length > 0 && (
+              <Row
+                label={`CVEs (${event.shodan_vulns.length})`}
+                value={event.shodan_vulns.slice(0, 3).join(', ') + (event.shodan_vulns.length > 3 ? ` +${event.shodan_vulns.length - 3}` : '')}
+                valueStyle={{ color: '#ef4444', fontSize: '10px', textAlign: 'right' }}
+              />
+            )}
+            {event.shodan_last_update && (
+              <Row label="LAST SCAN" value={new Date(event.shodan_last_update).toLocaleDateString()} valueStyle={s.dimVal} />
+            )}
+          </div>
+        )}
+
         {/* SENSOR */}
         <div style={s.section}>
           <div style={s.sectionLabel}>SENSOR</div>
