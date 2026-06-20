@@ -25,7 +25,7 @@ Real-time global attack visualization — SSH honeypots on Oracle Cloud feed liv
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
-| Threat intel | AlienVault OTX + Abuse.ch ThreatFox + Feodo Tracker (free, polled every 5 min) |
+| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (free, polled every 5 min) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -79,7 +79,6 @@ threatmap/
 | `MONGO_DB` | `threatmap` | Database name |
 | `GEOIP_DB_PATH` | `/data/GeoLite2-City.mmdb` | Path to MaxMind mmdb file |
 | `OTX_API_KEY` | — | AlienVault OTX API key (optional, enriches known-threat flags) |
-| `THREATFOX_API_KEY` | — | Abuse.ch ThreatFox API key (optional, anonymous access used if unset) |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
 
@@ -99,7 +98,7 @@ All secrets are stored in HashiCorp Vault (KV v2 mount: `secret/`) and synced to
 
 | Vault path | Keys | Description |
 |---|---|---|
-| `secret/threatmap/otx` | `otx_api_key` | AlienVault OTX API key |
+| `secret/threatmap/otx` | `otx_api_key` | AlienVault OTX API key (otx.alienvault.com) |
 | `secret/threatmap/maxmind` | `license_key`, `account_id` | MaxMind account credentials for GeoLite2 download |
 | `secret/threatmap/mongodb` | `password` | MongoDB `threatmap` user password (auto-generated if absent) |
 | `secret/kafka/threatmap` | `username`, `password` | Kafka SCRAM-SHA-512 credentials for consumer + producer (auto-generated if absent) |

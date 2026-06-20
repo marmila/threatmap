@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 OTX_API_KEY = os.getenv("OTX_API_KEY", "")
 OTX_BASE = "https://otx.alienvault.com/api/v1"
-THREATFOX_API_KEY = os.getenv("THREATFOX_API_KEY", "")
 
 _threat_ips: set[str] = set()
 
@@ -55,18 +54,6 @@ async def _refresh():
                         ips.add(line)
         except Exception as e:
             logger.warning(f"Feodo fetch failed: {e}")
-
-        try:
-            r = await client.post(
-                "https://threatfox-api.abuse.ch/api/v1/",
-                json={"query": "get_iocs", "days": 1, "api_key": THREATFOX_API_KEY},
-            )
-            if r.status_code == 200:
-                for ioc in r.json().get("data", []) or []:
-                    if ioc.get("ioc_type") == "ip:port":
-                        ips.add(ioc["ioc"].split(":")[0])
-        except Exception as e:
-            logger.warning(f"ThreatFox fetch failed: {e}")
 
     _threat_ips.clear()
     _threat_ips.update(ips)
