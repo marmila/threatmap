@@ -6,6 +6,34 @@ import { useWebSocket } from './hooks/useWebSocket.js'
 const MAX_ARCS = 300
 const ARC_TTL_MS = 8000
 
+const LEGEND_ITEMS = [
+  { color: '#ef4444', label: 'Login success' },
+  { color: '#f97316', label: 'Command executed' },
+  { color: '#fbbf24', label: 'Login attempt' },
+  { color: '#64748b', label: 'Connection' },
+]
+
+function Legend() {
+  return (
+    <div style={{
+      position: 'fixed', bottom: '24px', left: '24px',
+      background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
+      border: '1px solid #1e2535', borderRadius: '6px',
+      padding: '12px 14px', fontFamily: "'Courier New', monospace", zIndex: 10,
+    }}>
+      <div style={{ color: '#4ade80', fontSize: '9px', letterSpacing: '2px', marginBottom: '8px' }}>
+        ARC COLORS
+      </div>
+      {LEGEND_ITEMS.map(({ color, label }) => (
+        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+          <div style={{ width: '14px', height: '2px', background: color, borderRadius: '1px', flexShrink: 0 }} />
+          <span style={{ color: '#94a3b8', fontSize: '10px' }}>{label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function App() {
   const [arcs, setArcs] = useState([])
   const [liveEvents, setLiveEvents] = useState([])
@@ -67,6 +95,7 @@ export default function App() {
   return (
     <>
       <GlobeMap arcs={arcs} />
+      <Legend />
       <StatsPanel
         events={liveEvents}
         total={total}

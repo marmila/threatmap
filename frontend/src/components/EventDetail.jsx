@@ -92,6 +92,18 @@ function Row({ label, value, valueStyle }) {
   )
 }
 
+function LinkRow({ label, href, value, valueStyle }) {
+  return (
+    <div style={s.row}>
+      <span style={s.key}>{label}</span>
+      <a href={href} target="_blank" rel="noreferrer"
+         style={{ ...s.val, ...valueStyle, textDecoration: 'none' }}>
+        {value} ↗
+      </a>
+    </div>
+  )
+}
+
 export default function EventDetail({ event, onClose }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -124,7 +136,12 @@ export default function EventDetail({ event, onClose }) {
         {/* SOURCE */}
         <div style={s.section}>
           <div style={s.sectionLabel}>SOURCE</div>
-          <Row label="IP" value={event.src_ip} valueStyle={s.ip} />
+          <LinkRow
+            label="IP"
+            href={`https://www.abuseipdb.com/check/${event.src_ip}`}
+            value={event.src_ip}
+            valueStyle={s.ip}
+          />
           <Row label="COUNTRY" value={event.src_country_code
             ? `${event.src_country} (${event.src_country_code})`
             : event.src_country}
