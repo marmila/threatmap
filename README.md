@@ -108,7 +108,7 @@ The feeds act as lookup tables to classify attackers:
 | **AbuseIPDB check (per-IP)** | Real-time reputation score for each attacker IP | Score bar, total reports, distinct reporters, ISP in the detail modal |
 | **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect — contributes to the public blocklist |
 
-**Why OTX and Feodo rarely flag honeypot attackers:** those feeds track sophisticated C2 infrastructure (malware command-and-control servers), not SSH brute-force bots. The IPs hitting the honeypots are typically script-kiddie botnets and VPS scanners — a different population. **AbuseIPDB is the feed that actually tags SSH brute-forcers**, which is why the per-IP check and blacklist produce the most visible results.
+OTX and Feodo focus on C2 infrastructure; AbuseIPDB covers a broader range of attack patterns and tends to produce the most matches against honeypot traffic.
 
 ---
 
