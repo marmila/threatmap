@@ -164,6 +164,7 @@ Each event (WebSocket or REST) contains:
   "username": "root",
   "password": "123456",
   "honeypot": "honeypot-eu-01",
+  "protocol": "ssh",
   "command": "cat /etc/passwd",
   "duration": 4.2,
   "known_threat": true,

@@ -177,6 +177,13 @@ export default function EventDetail({ event, onClose }) {
               ? `${Number(event.src_lat).toFixed(3)}, ${Number(event.src_lon).toFixed(3)}`
               : null
           } />
+          {event.protocol && (
+            <Row
+              label="PROTOCOL"
+              value={event.protocol.toUpperCase()}
+              valueStyle={{ color: event.protocol === 'telnet' ? '#a78bfa' : '#60a5fa' }}
+            />
+          )}
         </div>
 
         {/* ATTACKER HISTORY — lazy loaded from MongoDB */}

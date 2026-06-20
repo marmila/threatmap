@@ -102,6 +102,7 @@ def _enrich(raw: dict) -> dict | None:
         "command": raw.get("input"),
         "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
+        "protocol": raw.get("protocol", "ssh"),
         "known_threat": is_known_threat(src_ip) or abuse_threat,
         "abuse_score": abuse_data.get("score", 0),
         "abuse_total_reports": abuse_data.get("total_reports", 0),

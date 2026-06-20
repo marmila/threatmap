@@ -175,6 +175,9 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
               <span>{e.src_ip}</span>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
+                {e.protocol === 'telnet' && (
+                  <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>TEL</span>
+                )}
                 {e.known_threat && (
                   <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>
                 )}
