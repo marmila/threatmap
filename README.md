@@ -94,6 +94,24 @@ threatmap/
 
 ---
 
+## Threat intelligence — how it works
+
+**Important:** OTX, Feodo, and AbuseIPDB are **enrichment feeds, not event sources**. They do not generate arcs on the globe. The only event source is the Cowrie honeypots — an arc appears only when a real SSH connection hits them.
+
+The feeds act as lookup tables to classify attackers:
+
+| Feed | What it contains | How it appears in the UI |
+|---|---|---|
+| **AlienVault OTX** | C2 server IPs from subscribed threat intel pulses | `known_threat=true` → red dot + KNOWN THREAT banner, *only if that IP also attacks the honeypot* |
+| **Abuse.ch Feodo Tracker** | Botnet C2 IPs (Emotet, QakBot, TrickBot) | Same as OTX |
+| **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, polled every 6h | Same — flags IP as known threat |
+| **AbuseIPDB check (per-IP)** | Real-time reputation score for each attacker IP | Score bar, total reports, distinct reporters, ISP in the detail modal |
+| **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect — contributes to the public blocklist |
+
+**Why OTX and Feodo rarely flag honeypot attackers:** those feeds track sophisticated C2 infrastructure (malware command-and-control servers), not SSH brute-force bots. The IPs hitting the honeypots are typically script-kiddie botnets and VPS scanners — a different population. **AbuseIPDB is the feed that actually tags SSH brute-forcers**, which is why the per-IP check and blacklist produce the most visible results.
+
+---
+
 ## Vault secrets
 
 All secrets are stored in HashiCorp Vault (KV v2 mount: `secret/`) and synced to Kubernetes via ExternalSecrets. Populated by `ansible/tasks/load_threatmap_credentials_into_vault.yml` (Stage 5 playbook).
