@@ -10,6 +10,7 @@ const eventColor = (t) => {
 }
 
 const s = {
+  // Desktop panel
   panel: {
     position: 'fixed', top: 0, right: 0, width: '280px', height: '100vh',
     background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
@@ -17,6 +18,21 @@ const s = {
     display: 'flex', flexDirection: 'column', gap: '16px',
     fontFamily: "'Courier New', monospace", zIndex: 10,
     overflowY: 'auto',
+  },
+  // Mobile bottom sheet
+  sheet: {
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    maxHeight: '50vh',
+    background: 'rgba(15,17,23,0.97)', backdropFilter: 'blur(12px)',
+    borderTop: '1px solid #1e2535', borderRadius: '14px 14px 0 0',
+    padding: '8px 16px 20px',
+    display: 'flex', flexDirection: 'column', gap: '10px',
+    fontFamily: "'Courier New', monospace", zIndex: 10,
+    overflowY: 'auto',
+  },
+  handle: {
+    width: '36px', height: '4px', background: '#334155',
+    borderRadius: '2px', margin: '0 auto 4px', flexShrink: 0,
   },
   title: { color: '#f1f5f9', fontSize: '13px', fontWeight: 'bold', letterSpacing: '2px' },
   badge: {
@@ -26,6 +42,7 @@ const s = {
   section: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { color: '#4ade80', fontSize: '10px', letterSpacing: '2px' },
   bigNum: { color: '#f1f5f9', fontSize: '28px', fontWeight: 'bold' },
+  bigNumMobile: { color: '#f1f5f9', fontSize: '20px', fontWeight: 'bold' },
   bar: { height: '2px', background: '#1e2535', borderRadius: '2px', margin: '2px 0' },
   barFill: { height: '100%', borderRadius: '2px', background: '#fbbf24', transition: 'width 0.5s' },
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' },
@@ -45,95 +62,110 @@ const s = {
   },
 }
 
-export default function StatsPanel({ events, total, topCountries, topIps = [], connected }) {
+export default function StatsPanel({ events, total, topCountries, topIps = [], connected, isMobile = false }) {
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
   const [selected, setSelected] = useState(null)
 
-  // Deduplicate feed by IP: keep most-recent event per IP, annotate with count
   const dedupedFeed = useMemo(() => {
     const seen = new Set()
     const result = []
     const ipCounts = {}
-    for (const e of events) {
-      ipCounts[e.src_ip] = (ipCounts[e.src_ip] || 0) + 1
-    }
+    for (const e of events) ipCounts[e.src_ip] = (ipCounts[e.src_ip] || 0) + 1
     for (const e of events) {
       if (!seen.has(e.src_ip)) {
         result.push({ ...e, _count: ipCounts[e.src_ip] })
         seen.add(e.src_ip)
       }
-      if (result.length >= 25) break
+      if (result.length >= (isMobile ? 15 : 25)) break
     }
     return result
-  }, [events])
+  }, [events, isMobile])
+
+  const liveBadge = (
+    <span style={{ ...s.badge, background: connected ? '#14532d' : '#450a0a', color: connected ? '#4ade80' : '#f87171' }}>
+      {connected ? '● LIVE' : '○ OFF'}
+    </span>
+  )
 
   return (
     <>
-    <div style={s.panel}>
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <div style={s.title}>THREATMAP</div>
-          <div style={{ color: '#334155', fontSize: '9px', letterSpacing: '1px' }}>
-            {import.meta.env.VITE_APP_VERSION || 'dev'}
+    <div style={isMobile ? s.sheet : s.panel}>
+
+      {/* Mobile: drag handle + compact header */}
+      {isMobile ? (
+        <>
+          <div style={s.handle} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={s.title}>THREATMAP</div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <span style={s.bigNumMobile}>{total.toLocaleString()}</span>
+              {liveBadge}
+            </div>
           </div>
-        </div>
-        <div style={{ marginTop: '4px' }}>
-          <span style={{ ...s.badge, background: connected ? '#14532d' : '#450a0a', color: connected ? '#4ade80' : '#f87171' }}>
-            {connected ? '● LIVE' : '○ RECONNECTING'}
-          </span>
-        </div>
-      </div>
-
-      <div style={s.section}>
-        <div style={s.label}>TOTAL ATTACKS</div>
-        <div style={s.bigNum}>{total.toLocaleString()}</div>
-      </div>
-
-      {topCountries.length > 0 && (
-        <div style={s.section}>
-          <div style={s.label}>TOP SOURCES</div>
-          {topCountries.slice(0, 5).map((c) => (
-            <div key={c.country}>
-              <div style={s.row}>
-                <span style={s.country}>{c.country || 'Unknown'}</span>
-                <span style={s.count}>{c.count.toLocaleString()}</span>
-              </div>
-              <div style={s.bar}>
-                <div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} />
+        </>
+      ) : (
+        /* Desktop: full header */
+        <>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <div style={s.title}>THREATMAP</div>
+              <div style={{ color: '#334155', fontSize: '9px', letterSpacing: '1px' }}>
+                {import.meta.env.VITE_APP_VERSION || 'dev'}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div style={{ marginTop: '4px' }}>{liveBadge}</div>
+          </div>
 
-      {topIps.length > 0 && (
-        <div style={s.section}>
-          <div style={s.label}>TOP IPs</div>
-          {topIps.slice(0, 5).map((entry) => (
-            <div key={entry.ip}>
-              <div style={s.row}>
-                <a href={`https://www.abuseipdb.com/check/${entry.ip}`}
-                   target="_blank" rel="noreferrer"
-                   style={{ ...s.ipAddr, textDecoration: 'none' }}>
-                  {entry.ip}
-                  {entry.known_threat && (
-                    <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>
-                  )}
-                </a>
-                <span style={s.count}>{entry.count.toLocaleString()}</span>
-              </div>
-              <div style={s.bar}>
-                <div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} />
-              </div>
+          <div style={s.section}>
+            <div style={s.label}>TOTAL ATTACKS</div>
+            <div style={s.bigNum}>{total.toLocaleString()}</div>
+          </div>
+
+          {topCountries.length > 0 && (
+            <div style={s.section}>
+              <div style={s.label}>TOP SOURCES</div>
+              {topCountries.slice(0, 5).map((c) => (
+                <div key={c.country}>
+                  <div style={s.row}>
+                    <span style={s.country}>{c.country || 'Unknown'}</span>
+                    <span style={s.count}>{c.count.toLocaleString()}</span>
+                  </div>
+                  <div style={s.bar}>
+                    <div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+
+          {topIps.length > 0 && (
+            <div style={s.section}>
+              <div style={s.label}>TOP IPs</div>
+              {topIps.slice(0, 5).map((entry) => (
+                <div key={entry.ip}>
+                  <div style={s.row}>
+                    <a href={`https://www.abuseipdb.com/check/${entry.ip}`}
+                       target="_blank" rel="noreferrer"
+                       style={{ ...s.ipAddr, textDecoration: 'none' }}>
+                      {entry.ip}
+                      {entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}
+                    </a>
+                    <span style={s.count}>{entry.count.toLocaleString()}</span>
+                  </div>
+                  <div style={s.bar}>
+                    <div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      <div style={s.section}>
-        <div style={s.label}>LIVE FEED</div>
-      </div>
+      {/* Live feed — shown on both mobile and desktop */}
+      {!isMobile && <div style={s.section}><div style={s.label}>LIVE FEED</div></div>}
+      {isMobile && <div style={s.label}>LIVE FEED</div>}
       <div style={s.feed}>
         {dedupedFeed.map((e, i) => (
           <div key={i}
@@ -144,18 +176,12 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
                 {e.known_threat && (
-                  <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>
-                    THREAT
-                  </span>
+                  <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>
                 )}
               </div>
             </div>
-            <div style={s.detail}>
-              {e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}
-            </div>
-            <div style={s.detail}>
-              {e.event_type}{e.username ? ` · ${e.username}` : ''}
-            </div>
+            <div style={s.detail}>{e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}</div>
+            <div style={s.detail}>{e.event_type}{e.username ? ` · ${e.username}` : ''}</div>
           </div>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useWindowSize } from '../hooks/useWindowSize.js'
 
 const EVENT_LABELS = {
   'cowrie.login.success':   'LOGIN SUCCESS',
@@ -43,6 +44,18 @@ const s = {
     border: '1px solid #1e2535', borderRadius: '8px',
     padding: '20px', zIndex: 21,
     fontFamily: "'Courier New', monospace",
+  },
+  modalMobile: {
+    position: 'fixed', inset: 0,
+    width: '100%', height: '100%', overflowY: 'auto',
+    background: 'rgba(15,17,23,0.99)', backdropFilter: 'blur(12px)',
+    borderRadius: 0, padding: '16px 14px 32px',
+    zIndex: 21, fontFamily: "'Courier New', monospace",
+  },
+  closeBtnMobile: {
+    background: '#1e2535', border: 'none', color: '#94a3b8',
+    cursor: 'pointer', fontSize: '20px', padding: '8px 14px',
+    borderRadius: '6px',
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -105,6 +118,7 @@ function LinkRow({ label, href, value, valueStyle }) {
 }
 
 export default function EventDetail({ event, onClose }) {
+  const { isMobile } = useWindowSize()
   const [ipStats, setIpStats] = useState(null)
 
   useEffect(() => {
@@ -133,11 +147,11 @@ export default function EventDetail({ event, onClose }) {
 
   return (
     <>
-      <div style={s.overlay} onClick={onClose} />
-      <div style={s.modal}>
+      {!isMobile && <div style={s.overlay} onClick={onClose} />}
+      <div style={isMobile ? s.modalMobile : s.modal}>
         <div style={s.header}>
           <span style={s.title}>ATTACK DETAIL</span>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+          <button style={isMobile ? s.closeBtnMobile : s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         <div style={{ ...s.badge, background: badge.bg, color: badge.color }}>

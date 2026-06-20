@@ -53,7 +53,8 @@ threatmap/
 │   │   │   ├── StatsPanel.jsx   Live feed, top countries, total counter
 │   │   │   └── EventDetail.jsx  Click-to-expand modal with full attack detail
 │   │   └── hooks/
-│   │       └── useWebSocket.js  Auto-reconnecting WebSocket hook
+│   │       ├── useWebSocket.js  Auto-reconnecting WebSocket hook
+│   │       └── useWindowSize.js Reactive window dimensions + isMobile flag (< 768px)
 │   ├── index.html
 │   ├── vite.config.js
 │   ├── nginx.conf
@@ -190,7 +191,7 @@ Each event (WebSocket or REST) contains:
 | `cowrie.login.success` | Red | Attacker got past authentication |
 | `cowrie.login.failed` | Amber | Brute-force attempt |
 | `cowrie.command.input` | Orange | Active session, commands executed |
-| `cowrie.session.connect` / `cowrie.log.closed` | Grey | Connection noise, not interesting |
+| `cowrie.session.connect` / `cowrie.session.closed` | Grey | Connection noise, not interesting |
 
 ---
 

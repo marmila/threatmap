@@ -1,5 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import Globe from 'react-globe.gl'
+import { useWindowSize } from '../hooks/useWindowSize.js'
 
 const ARC_LIFETIME_MS = 4000
 
@@ -23,6 +24,7 @@ const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 
 export default function GlobeMap({ arcs }) {
   const globeRef = useRef()
+  const { width, height } = useWindowSize()
 
   useEffect(() => {
     const ctrl = globeRef.current?.controls()
@@ -43,8 +45,8 @@ export default function GlobeMap({ arcs }) {
   return (
     <Globe
       ref={globeRef}
-      width={window.innerWidth}
-      height={window.innerHeight}
+      width={width}
+      height={height}
       globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
       backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
       arcsData={arcs}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import GlobeMap from './components/GlobeMap.jsx'
 import StatsPanel from './components/StatsPanel.jsx'
 import { useWebSocket } from './hooks/useWebSocket.js'
+import { useWindowSize } from './hooks/useWindowSize.js'
 
 const MAX_ARCS = 300
 const ARC_TTL_MS = 8000
@@ -35,6 +36,7 @@ function Legend() {
 }
 
 export default function App() {
+  const { isMobile } = useWindowSize()
   const [arcs, setArcs] = useState([])
   const [liveEvents, setLiveEvents] = useState([])
   const [total, setTotal] = useState(0)
@@ -97,13 +99,14 @@ export default function App() {
   return (
     <>
       <GlobeMap arcs={arcs} />
-      <Legend />
+      {!isMobile && <Legend />}
       <StatsPanel
         events={liveEvents}
         total={total}
         topCountries={topCountries}
         topIps={topIps}
         connected={connected}
+        isMobile={isMobile}
       />
     </>
   )
