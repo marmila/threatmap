@@ -13,7 +13,7 @@ ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "")
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 
 _threat_ips: set[str] = set()
-_abuse_cache: dict[str, tuple[int, float]] = {}  # ip -> (score, checked_at_epoch)
+_abuse_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
 _ABUSE_TTL = 86400  # 24 hours
 
 
@@ -21,15 +21,18 @@ def is_known_threat(ip: str) -> bool:
     return ip in _threat_ips
 
 
-def check_abuseipdb(ip: str) -> tuple[bool, int]:
-    """Returns (is_threat, confidence_score 0-100). Caches results per IP for 24h."""
+def check_abuseipdb(ip: str) -> tuple[bool, dict]:
+    """Returns (is_threat, data dict). Caches results per IP for 24h.
+
+    data keys: score, total_reports, distinct_users, last_reported, isp, usage_type, is_tor
+    """
     if not ABUSEIPDB_API_KEY:
-        return False, 0
+        return False, {}
     now = time.time()
     if ip in _abuse_cache:
-        score, checked_at = _abuse_cache[ip]
+        data, checked_at = _abuse_cache[ip]
         if now - checked_at < _ABUSE_TTL:
-            return score >= 50, score
+            return data.get("score", 0) >= 50, data
     try:
         with httpx.Client(timeout=5) as client:
             r = client.get(
@@ -38,12 +41,21 @@ def check_abuseipdb(ip: str) -> tuple[bool, int]:
                 params={"ipAddress": ip, "maxAgeInDays": 90},
             )
             if r.status_code == 200:
-                score = r.json()["data"]["abuseConfidenceScore"]
-                _abuse_cache[ip] = (score, now)
-                return score >= 50, score
+                d = r.json()["data"]
+                data = {
+                    "score": d.get("abuseConfidenceScore", 0),
+                    "total_reports": d.get("totalReports", 0),
+                    "distinct_users": d.get("numDistinctUsers", 0),
+                    "last_reported": d.get("lastReportedAt"),
+                    "isp": d.get("isp"),
+                    "usage_type": d.get("usageType"),
+                    "is_tor": d.get("isTor", False),
+                }
+                _abuse_cache[ip] = (data, now)
+                return data["score"] >= 50, data
     except Exception as e:
         logger.warning(f"AbuseIPDB check failed for {ip}: {e}")
-    return False, 0
+    return False, {}
 
 
 async def start_threat_poller():

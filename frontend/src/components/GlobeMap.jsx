@@ -8,7 +8,7 @@ const ARC_COLORS = {
   'cowrie.login.failed':    ['rgba(251,191,36,0.8)',  'rgba(251,191,36,0)'],
   'cowrie.command.input':   ['rgba(249,115,22,0.9)',  'rgba(249,115,22,0)'],
   'cowrie.session.connect': ['rgba(100,116,139,0.5)', 'rgba(100,116,139,0)'],
-  'cowrie.log.closed':      ['rgba(100,116,139,0.4)', 'rgba(100,116,139,0)'],
+  'cowrie.session.closed':      ['rgba(100,116,139,0.4)', 'rgba(100,116,139,0)'],
 }
 const DEFAULT_ARC = ['rgba(251,191,36,0.8)', 'rgba(251,191,36,0)']
 
@@ -17,7 +17,7 @@ const POINT_COLORS = {
   'cowrie.login.failed':    'rgba(251,191,36,0.7)',
   'cowrie.command.input':   'rgba(249,115,22,0.9)',
   'cowrie.session.connect': 'rgba(100,116,139,0.5)',
-  'cowrie.log.closed':      'rgba(100,116,139,0.4)',
+  'cowrie.session.closed':      'rgba(100,116,139,0.4)',
 }
 const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 

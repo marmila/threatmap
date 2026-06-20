@@ -140,8 +140,16 @@ Each event (WebSocket or REST) contains:
   "username": "root",
   "password": "123456",
   "honeypot": "honeypot-eu-01",
-  "known_threat": false,
-  "abuse_score": 42
+  "command": "cat /etc/passwd",
+  "duration": 4.2,
+  "known_threat": true,
+  "abuse_score": 100,
+  "abuse_total_reports": 5823,
+  "abuse_distinct_users": 1234,
+  "abuse_last_reported": "2026-06-20T08:00:00+00:00",
+  "abuse_isp": "Consortium GARR",
+  "abuse_usage_type": "Data Center/Web Hosting/Transit",
+  "abuse_is_tor": false
 }
 ```
 

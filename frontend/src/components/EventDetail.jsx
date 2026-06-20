@@ -4,16 +4,22 @@ const EVENT_LABELS = {
   'cowrie.login.success':   'LOGIN SUCCESS',
   'cowrie.login.failed':    'LOGIN ATTEMPT',
   'cowrie.session.connect': 'CONNECTION',
-  'cowrie.log.closed':      'SESSION CLOSED',
+  'cowrie.session.closed':  'SESSION CLOSED',
   'cowrie.command.input':   'COMMAND EXECUTED',
+  'cowrie.command.failed':  'COMMAND FAILED',
+  'cowrie.command.success': 'COMMAND SUCCESS',
+  'cowrie.client.version':  'CLIENT HANDSHAKE',
 }
 
 const EVENT_BADGE = {
   'cowrie.login.success':   { bg: '#450a0a', color: '#ef4444' },
   'cowrie.login.failed':    { bg: '#3d2700', color: '#fbbf24' },
   'cowrie.command.input':   { bg: '#431407', color: '#f97316' },
+  'cowrie.command.failed':  { bg: '#431407', color: '#f97316' },
+  'cowrie.command.success': { bg: '#431407', color: '#f97316' },
   'cowrie.session.connect': { bg: '#0f172a', color: '#64748b' },
-  'cowrie.log.closed':      { bg: '#0f172a', color: '#64748b' },
+  'cowrie.session.closed':  { bg: '#0f172a', color: '#64748b' },
+  'cowrie.client.version':  { bg: '#0f172a', color: '#64748b' },
 }
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
@@ -32,7 +38,7 @@ const s = {
   modal: {
     position: 'fixed', top: '50%', left: 'calc(50% - 140px)',
     transform: 'translate(-50%, -50%)',
-    width: '380px', maxHeight: '80vh', overflowY: 'auto',
+    width: '400px', maxHeight: '85vh', overflowY: 'auto',
     background: 'rgba(15,17,23,0.98)', backdropFilter: 'blur(12px)',
     border: '1px solid #1e2535', borderRadius: '8px',
     padding: '20px', zIndex: 21,
@@ -60,14 +66,21 @@ const s = {
     display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
     fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '14px',
   },
-  scoreBar: { height: '3px', background: '#1e2535', borderRadius: '2px', margin: '2px 0 6px' },
+  scoreBar: { height: '3px', background: '#1e2535', borderRadius: '2px', margin: '2px 0 8px' },
   scoreBarFill: { height: '100%', borderRadius: '2px', transition: 'width 0.5s' },
   threatBadge: {
     display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
     background: '#450a0a', color: '#f87171',
     fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px',
   },
+  torBadge: {
+    display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
+    background: '#1e1b4b', color: '#a78bfa',
+    fontSize: '9px', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '6px',
+  },
   password: { color: '#fb923c', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' },
+  command: { color: '#f97316', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all', fontStyle: 'italic' },
+  dimVal: { color: '#64748b', fontSize: '10px', textAlign: 'right' },
 }
 
 function Row({ label, value, valueStyle }) {
@@ -92,6 +105,9 @@ export default function EventDetail({ event, onClose }) {
   const badge = EVENT_BADGE[event.event_type] || DEFAULT_BADGE
   const label = EVENT_LABELS[event.event_type] || event.event_type
 
+  const hasAttackDetail = event.username || event.password || event.command
+  const hasAbuseData = event.abuse_score > 0
+
   return (
     <>
       <div style={s.overlay} onClick={onClose} />
@@ -105,6 +121,7 @@ export default function EventDetail({ event, onClose }) {
           {label}
         </div>
 
+        {/* SOURCE */}
         <div style={s.section}>
           <div style={s.sectionLabel}>SOURCE</div>
           <Row label="IP" value={event.src_ip} valueStyle={s.ip} />
@@ -120,20 +137,30 @@ export default function EventDetail({ event, onClose }) {
           } />
         </div>
 
-        <div style={s.section}>
-          <div style={s.sectionLabel}>ATTACK</div>
-          <Row label="USERNAME" value={event.username} />
-          <Row label="PASSWORD" value={event.password} valueStyle={s.password} />
-          <Row label="RAW TYPE" value={event.event_type} />
-        </div>
+        {/* ATTACK — only render if there's something meaningful */}
+        {hasAttackDetail && (
+          <div style={s.section}>
+            <div style={s.sectionLabel}>ATTACK</div>
+            {event.command && (
+              <Row label="COMMAND" value={event.command} valueStyle={s.command} />
+            )}
+            {event.username && (
+              <Row label="USERNAME" value={event.username} />
+            )}
+            {event.password && (
+              <Row label="PASSWORD" value={event.password} valueStyle={s.password} />
+            )}
+          </div>
+        )}
 
-        {(event.abuse_score > 0 || event.known_threat) && (
+        {/* THREAT INTEL */}
+        {(hasAbuseData || event.known_threat) && (
           <div style={s.section}>
             <div style={s.sectionLabel}>THREAT INTEL</div>
-            {event.abuse_score > 0 && (
+            {hasAbuseData && (
               <>
                 <Row
-                  label="ABUSEIPDB"
+                  label="ABUSEIPDB SCORE"
                   value={`${event.abuse_score}/100`}
                   valueStyle={{ color: abuseColor(event.abuse_score) }}
                 />
@@ -144,18 +171,43 @@ export default function EventDetail({ event, onClose }) {
                     background: abuseColor(event.abuse_score),
                   }} />
                 </div>
+                {event.abuse_total_reports > 0 && (
+                  <Row label="REPORTS (90d)" value={event.abuse_total_reports.toLocaleString()} />
+                )}
+                {event.abuse_distinct_users > 0 && (
+                  <Row label="DISTINCT REPORTERS" value={event.abuse_distinct_users.toLocaleString()} />
+                )}
+                {event.abuse_last_reported && (
+                  <Row label="LAST SEEN" value={new Date(event.abuse_last_reported).toLocaleDateString()} />
+                )}
+                {event.abuse_isp && (
+                  <Row label="ISP" value={event.abuse_isp} valueStyle={s.dimVal} />
+                )}
+                {event.abuse_usage_type && (
+                  <Row label="USAGE TYPE" value={event.abuse_usage_type} valueStyle={s.dimVal} />
+                )}
               </>
             )}
-            {event.known_threat && (
-              <div style={s.threatBadge}>⚠ KNOWN THREAT ACTOR</div>
-            )}
+            <div>
+              {event.known_threat && (
+                <span style={s.threatBadge}>⚠ KNOWN THREAT ACTOR</span>
+              )}
+              {event.abuse_is_tor && (
+                <span style={s.torBadge}>◉ TOR EXIT NODE</span>
+              )}
+            </div>
           </div>
         )}
 
+        {/* SENSOR */}
         <div style={s.section}>
           <div style={s.sectionLabel}>SENSOR</div>
           <Row label="HONEYPOT" value={event.honeypot} />
           <Row label="TIME" value={time} />
+          {event.duration != null && (
+            <Row label="DURATION" value={`${Number(event.duration).toFixed(1)}s`} valueStyle={s.dimVal} />
+          )}
+          <Row label="EVENT ID" value={event.event_type} valueStyle={s.dimVal} />
         </div>
       </div>
     </>

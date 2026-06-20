@@ -5,7 +5,7 @@ const eventColor = (t) => {
   if (!t) return '#fbbf24'
   if (t.includes('login.success')) return '#ef4444'
   if (t.includes('command.input')) return '#f97316'
-  if (t.includes('session.connect') || t.includes('log.closed')) return '#64748b'
+  if (t.includes('session.connect') || t.includes('session.closed')) return '#64748b'
   return '#fbbf24'
 }
 

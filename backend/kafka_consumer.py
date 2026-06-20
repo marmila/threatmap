@@ -69,7 +69,7 @@ def _enrich(raw: dict) -> dict | None:
     if not geo:
         return None
 
-    abuse_threat, abuse_score = check_abuseipdb(src_ip)
+    abuse_threat, abuse_data = check_abuseipdb(src_ip)
 
     return {
         "timestamp": raw.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -84,9 +84,17 @@ def _enrich(raw: dict) -> dict | None:
         "event_type": raw.get("eventid", "ssh.login"),
         "username": raw.get("username"),
         "password": raw.get("password"),
+        "command": raw.get("input"),
+        "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
         "known_threat": is_known_threat(src_ip) or abuse_threat,
-        "abuse_score": abuse_score,
+        "abuse_score": abuse_data.get("score", 0),
+        "abuse_total_reports": abuse_data.get("total_reports", 0),
+        "abuse_distinct_users": abuse_data.get("distinct_users", 0),
+        "abuse_last_reported": abuse_data.get("last_reported"),
+        "abuse_isp": abuse_data.get("isp"),
+        "abuse_usage_type": abuse_data.get("usage_type"),
+        "abuse_is_tor": abuse_data.get("is_tor", False),
     }
 
 
