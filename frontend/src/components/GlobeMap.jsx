@@ -22,7 +22,7 @@ const POINT_COLORS = {
 }
 const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 
-export default function GlobeMap({ arcs, heatPoints = [] }) {
+export default function GlobeMap({ arcs }) {
   const globeRef = useRef()
   const { width, height } = useWindowSize()
 
@@ -41,8 +41,6 @@ export default function GlobeMap({ arcs, heatPoints = [] }) {
     () => arcs.map((a) => ({ lat: a.src_lat, lng: a.src_lon, event_type: a.event_type })),
     [arcs]
   )
-
-  const heatDataset = useMemo(() => [heatPoints], [heatPoints])
 
   return (
     <Globe
@@ -67,15 +65,6 @@ export default function GlobeMap({ arcs, heatPoints = [] }) {
       pointColor={pointColor}
       pointRadius={0.25}
       pointAltitude={0.01}
-      heatmapsData={heatDataset}
-      heatmapPointsAccessor={(d) => d}
-      heatmapPointLat={(d) => d.lat}
-      heatmapPointLng={(d) => d.lng}
-      heatmapPointWeight={() => 1}
-      heatmapBandwidth={3}
-      heatmapColorFn={(t) => `rgba(255,${Math.round(120 * (1 - t))},0,${Math.pow(t, 0.5) * 0.7})`}
-      heatmapTopAltitude={0.005}
-      heatmapTransitionDuration={300}
     />
   )
 }
