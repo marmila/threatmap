@@ -440,6 +440,8 @@ All steps above apply identically to both VMs. The only differences:
 - Different VPN IPs (assigned by PiVPN)
 - Different `HOSTNAME` (used as tag in Fluent-Bit)
 - Different `honeypot_host` in the Fluent-Bit filter
+- OpenCanary `device.node_id` must be `"opencanary-eu-02"` (not `opencanary-eu-01`)
+- Cowrie `hostname` in `cowrie.cfg` must be `webserver-eu-02`
 
 ---
 
