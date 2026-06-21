@@ -42,6 +42,18 @@ export default function GlobeMap({ arcs }) {
     [arcs]
   )
 
+  const labelData = useMemo(() => {
+    const seen = new Set()
+    return arcs.reduce((acc, a) => {
+      if (!a.src_country || !a.src_lat || !a.src_lon) return acc
+      if (!seen.has(a.src_country)) {
+        seen.add(a.src_country)
+        acc.push({ lat: a.src_lat, lng: a.src_lon, text: a.src_city || a.src_country })
+      }
+      return acc
+    }, [])
+  }, [arcs])
+
   return (
     <Globe
       ref={globeRef}
@@ -65,6 +77,16 @@ export default function GlobeMap({ arcs }) {
       pointColor={pointColor}
       pointRadius={0.25}
       pointAltitude={0.01}
+      labelsData={labelData}
+      labelLat={(d) => d.lat}
+      labelLng={(d) => d.lng}
+      labelText={(d) => d.text}
+      labelColor={() => 'rgba(200,220,255,0.75)'}
+      labelSize={0.45}
+      labelAltitude={0.01}
+      labelDotRadius={0.3}
+      labelDotColor={() => 'rgba(200,220,255,0.4)'}
+      labelResolution={2}
     />
   )
 }

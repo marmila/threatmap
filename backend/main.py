@@ -86,12 +86,30 @@ async def stats():
         {"$limit": 10},
         {"$project": {"ip": "$_id", "count": 1, "country": 1, "known_threat": 1, "_id": 0}},
     ]
+    protocol_pipeline = [
+        {"$group": {"_id": "$protocol", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$project": {"protocol": "$_id", "count": 1, "_id": 0}},
+    ]
+    honeypot_pipeline = [
+        {"$group": {"_id": "$honeypot", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$project": {"honeypot": "$_id", "count": 1, "_id": 0}},
+    ]
 
-    top_countries, top_ips = await asyncio.gather(
+    top_countries, top_ips, protocol_breakdown, honeypot_breakdown = await asyncio.gather(
         db.events.aggregate(country_pipeline).to_list(10),
         db.events.aggregate(ip_pipeline).to_list(10),
+        db.events.aggregate(protocol_pipeline).to_list(10),
+        db.events.aggregate(honeypot_pipeline).to_list(10),
     )
-    return {"total": total, "top_countries": top_countries, "top_ips": top_ips}
+    return {
+        "total": total,
+        "top_countries": top_countries,
+        "top_ips": top_ips,
+        "protocol_breakdown": protocol_breakdown,
+        "honeypot_breakdown": honeypot_breakdown,
+    }
 
 
 @app.get("/api/ip/{ip}/stats")
@@ -116,6 +134,44 @@ async def ip_stats(ip: str):
         "last_seen": max(r["last_seen"] for r in results),
         "event_breakdown": [{"event_type": r["_id"], "count": r["count"]} for r in results],
     }
+
+
+@app.get("/api/stats/credentials")
+async def credentials_stats():
+    db = get_db()
+    username_pipeline = [
+        {"$match": {"username": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$username", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"username": "$_id", "count": 1, "_id": 0}},
+    ]
+    password_pipeline = [
+        {"$match": {"password": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$password", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"password": "$_id", "count": 1, "_id": 0}},
+    ]
+    top_usernames, top_passwords = await asyncio.gather(
+        db.events.aggregate(username_pipeline).to_list(10),
+        db.events.aggregate(password_pipeline).to_list(10),
+    )
+    return {"top_usernames": top_usernames, "top_passwords": top_passwords}
+
+
+@app.get("/api/stats/commands")
+async def commands_stats():
+    db = get_db()
+    pipeline = [
+        {"$match": {"event_type": "cowrie.command.input", "command": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$command", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"command": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(10)
+    return results
 
 
 @app.get("/api/stats/hourly")

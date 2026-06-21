@@ -14,13 +14,17 @@ Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live 
 
 ## What it does
 
-- Cowrie SSH honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
+- Cowrie SSH+Telnet honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
-- React frontend renders animated attack arcs on a 3D globe in real time via WebSocket
+- React frontend renders animated attack arcs on a 3D globe in real time via WebSocket, with floating country/city labels at attack origins
 - Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey
 - Hourly bar chart in the stats panel shows attack volume over the last 24 hours
-- Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner in detail modal
+- Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner + intel source name in detail modal
+- Returning attackers flagged with RPT badge in the live feed (in-session detection)
+- Credentials leaderboard shows top usernames and passwords tried across all attacks
+- Top commands section shows most common shell commands executed by attackers
+- Sensor breakdown shows per-honeypot attack counts; protocol split shows SSH vs Telnet totals
 - Click any event in the live feed for full attack detail (credentials attempted, honeypot sensor, geo coords)
 
 ---
@@ -147,8 +151,10 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 | Endpoint | Description |
 |---|---|
 | `GET /api/events/recent?limit=200` | Last N enriched attack events from MongoDB |
-| `GET /api/stats` | Total event count + top 10 attacker countries + top 10 attacker IPs |
+| `GET /api/stats` | Total count + top 10 countries/IPs + protocol breakdown + honeypot breakdown |
 | `GET /api/stats/hourly` | Attack count per hour for the last 24 hours (used by bar chart) |
+| `GET /api/stats/credentials` | Top 10 usernames and top 10 passwords tried across all attacks |
+| `GET /api/stats/commands` | Top 10 shell commands executed in `cowrie.command.input` events |
 | `GET /api/ip/{ip}/stats` | Per-IP history: total attacks, first/last seen, event type breakdown |
 | `WS /ws/events` | Live event stream (JSON, one event per message) |
 | `GET /healthz` | Liveness probe |
@@ -189,7 +195,10 @@ Each event (WebSocket or REST) contains:
   "shodan_org": "DigitalOcean LLC",
   "shodan_hostnames": ["scanner.example.com"],
   "shodan_os": null,
-  "shodan_last_update": "2026-06-15T12:00:00"
+  "shodan_last_update": "2026-06-15T12:00:00",
+  "threat_source": "Feodo Tracker",
+  "is_returning": true,
+  "previous_count": 14
 }
 ```
 

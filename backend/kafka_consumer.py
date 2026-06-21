@@ -22,6 +22,8 @@ HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
 # SSH negotiation noise — not useful for threat visualization
+_seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning attacker detection)
+
 _SKIP_EVENT_TYPES = {
     "cowrie.session.params",
     "cowrie.session.closed",
@@ -84,8 +86,12 @@ def _enrich(raw: dict) -> dict | None:
     if not geo:
         return None
 
+    otx_threat, threat_source = is_known_threat(src_ip)
     abuse_threat, abuse_data = check_abuseipdb(src_ip)
     shodan_data = check_shodan(src_ip)
+
+    prev_count = _seen_ips.get(src_ip, 0)
+    _seen_ips[src_ip] = prev_count + 1
 
     return {
         "timestamp": raw.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -104,7 +110,10 @@ def _enrich(raw: dict) -> dict | None:
         "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
         "protocol": raw.get("protocol", "ssh"),
-        "known_threat": is_known_threat(src_ip) or abuse_threat,
+        "known_threat": otx_threat or abuse_threat,
+        "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
+        "is_returning": prev_count > 0,
+        "previous_count": prev_count,
         "abuse_score": abuse_data.get("score", 0),
         "abuse_total_reports": abuse_data.get("total_reports", 0),
         "abuse_distinct_users": abuse_data.get("distinct_users", 0),

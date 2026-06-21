@@ -14,7 +14,7 @@ ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "")
 SHODAN_BASE = "https://api.shodan.io"
 
-_threat_ips: set[str] = set()
+_threat_ips: dict[str, str] = {}                   # ip -> source name (OTX pulse / "Feodo Tracker" / "AbuseIPDB Blacklist")
 _abuse_cache: dict[str, tuple[dict, float]] = {}   # ip -> (data, checked_at_epoch)
 _shodan_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
 _reported_cache: dict[str, float] = {}             # ip -> last_reported_at
@@ -25,8 +25,10 @@ _REPORT_TTL = 900     # 15 min minimum between reports for same IP (AbuseIPDB TO
 _REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
 
-def is_known_threat(ip: str) -> bool:
-    return ip in _threat_ips
+def is_known_threat(ip: str) -> tuple[bool, str]:
+    """Returns (is_threat, source_name). Source is OTX pulse name, 'Feodo Tracker', or 'AbuseIPDB Blacklist'."""
+    src = _threat_ips.get(ip)
+    return (True, src) if src else (False, "")
 
 
 def check_abuseipdb(ip: str) -> tuple[bool, dict]:
@@ -157,7 +159,7 @@ async def start_threat_poller():
 
 
 async def _refresh():
-    ips: set[str] = set()
+    ips: dict[str, str] = {}
     since = (datetime.utcnow() - timedelta(days=1)).isoformat()
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -170,9 +172,10 @@ async def _refresh():
                 )
                 if r.status_code == 200:
                     for pulse in r.json().get("results", []):
+                        pulse_name = pulse.get("name", "OTX")
                         for ind in pulse.get("indicators", []):
                             if ind.get("type") == "IPv4":
-                                ips.add(ind["indicator"])
+                                ips.setdefault(ind["indicator"], pulse_name)
             except Exception as e:
                 logger.warning(f"OTX fetch failed: {e}")
 
@@ -182,7 +185,7 @@ async def _refresh():
                 for line in r.text.splitlines():
                     line = line.strip()
                     if line and not line.startswith("#"):
-                        ips.add(line)
+                        ips.setdefault(line, "Feodo Tracker")
         except Exception as e:
             logger.warning(f"Feodo fetch failed: {e}")
 
@@ -203,8 +206,9 @@ async def _refresh_blacklist():
                 params={"confidenceMinimum": 90},
             )
             if r.status_code == 200:
-                new_ips = {line.strip() for line in r.text.splitlines() if line.strip()}
-                _threat_ips.update(new_ips)
+                new_ips = [line.strip() for line in r.text.splitlines() if line.strip()]
+                for ip in new_ips:
+                    _threat_ips.setdefault(ip, "AbuseIPDB Blacklist")
                 logger.info(f"AbuseIPDB blacklist: {len(new_ips)} IPs merged into threat set")
             else:
                 logger.warning(f"AbuseIPDB blacklist HTTP {r.status_code}")

@@ -125,7 +125,7 @@ function HourlyChart({ data }) {
   )
 }
 
-export default function StatsPanel({ events, total, topCountries, topIps = [], connected, isMobile = false, hourlyData = [] }) {
+export default function StatsPanel({ events, total, topCountries, topIps = [], connected, isMobile = false, hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] }, commandsData = [], protocolBreakdown = [], honeypotBreakdown = [] }) {
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
   const [selected, setSelected] = useState(null)
@@ -166,6 +166,20 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
               {liveBadge}
             </div>
           </div>
+          {protocolBreakdown.length > 0 && (
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {protocolBreakdown.map(p => (
+                <span key={p.protocol} style={{
+                  fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
+                  background: p.protocol === 'telnet' ? '#2e1065' : '#0f172a',
+                  color: p.protocol === 'telnet' ? '#a78bfa' : '#60a5fa',
+                  border: `1px solid ${p.protocol === 'telnet' ? '#4c1d95' : '#1e3a5f'}`,
+                }}>
+                  {(p.protocol || 'unknown').toUpperCase()} {p.count.toLocaleString()}
+                </span>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         /* Desktop: full header */
@@ -183,6 +197,20 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
           <div style={s.section}>
             <div style={s.label}>TOTAL ATTACKS</div>
             <div style={s.bigNum}>{total.toLocaleString()}</div>
+            {protocolBreakdown.length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                {protocolBreakdown.map(p => (
+                  <span key={p.protocol} style={{
+                    fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
+                    background: p.protocol === 'telnet' ? '#2e1065' : '#0f172a',
+                    color: p.protocol === 'telnet' ? '#a78bfa' : '#60a5fa',
+                    border: `1px solid ${p.protocol === 'telnet' ? '#4c1d95' : '#1e3a5f'}`,
+                  }}>
+                    {(p.protocol || 'unknown').toUpperCase()} {p.count.toLocaleString()}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {topCountries.length > 0 && (
@@ -229,6 +257,59 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
       {/* Hourly chart — desktop only */}
       {!isMobile && <HourlyChart data={hourlyData} />}
 
+      {/* Sensor breakdown — desktop only */}
+      {!isMobile && honeypotBreakdown.length > 0 && (
+        <div style={s.section}>
+          <div style={s.label}>SENSORS</div>
+          {honeypotBreakdown.map(h => (
+            <div key={h.honeypot} style={s.row}>
+              <span style={s.country}>{h.honeypot || 'unknown'}</span>
+              <span style={s.count}>{h.count.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Credentials leaderboard — desktop only */}
+      {!isMobile && (credentialsData.top_usernames?.length > 0 || credentialsData.top_passwords?.length > 0) && (
+        <div style={s.section}>
+          <div style={s.label}>TOP CREDENTIALS</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+            <div>
+              <div style={{ color: '#60a5fa', fontSize: '8px', letterSpacing: '1px', marginBottom: '4px' }}>USERNAMES</div>
+              {credentialsData.top_usernames?.slice(0, 6).map((u, i) => (
+                <div key={i} style={{ ...s.row, marginBottom: '3px' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
+                  <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ color: '#fb923c', fontSize: '8px', letterSpacing: '1px', marginBottom: '4px' }}>PASSWORDS</div>
+              {credentialsData.top_passwords?.slice(0, 6).map((p, i) => (
+                <div key={i} style={{ ...s.row, marginBottom: '3px' }}>
+                  <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
+                  <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top commands — desktop only */}
+      {!isMobile && commandsData.length > 0 && (
+        <div style={s.section}>
+          <div style={s.label}>TOP COMMANDS</div>
+          {commandsData.slice(0, 5).map((c, i) => (
+            <div key={i} style={{ ...s.row, marginBottom: '3px' }}>
+              <span style={{ color: '#f97316', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{c.command}</span>
+              <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{c.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Live feed — shown on both mobile and desktop */}
       {!isMobile && <div style={s.section}><div style={s.label}>LIVE FEED</div></div>}
       {isMobile && <div style={s.label}>LIVE FEED</div>}
@@ -241,6 +322,9 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
               <span>{e.src_ip}</span>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
+                {e.is_returning && (
+                  <span style={{ ...s.badge, background: '#1c1917', color: '#a8a29e' }}>RPT</span>
+                )}
                 {e.protocol === 'telnet' && (
                   <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>TEL</span>
                 )}

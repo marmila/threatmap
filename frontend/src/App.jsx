@@ -44,6 +44,10 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [topIps, setTopIps] = useState([])
   const [hourlyData, setHourlyData] = useState([])
+  const [credentialsData, setCredentialsData] = useState({ top_usernames: [], top_passwords: [] })
+  const [commandsData, setCommandsData] = useState([])
+  const [protocolBreakdown, setProtocolBreakdown] = useState([])
+  const [honeypotBreakdown, setHoneypotBreakdown] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -80,18 +84,26 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [evRes, stRes, hrRes] = await Promise.all([
+        const [evRes, stRes, hrRes, credRes, cmdRes] = await Promise.all([
           fetch('/api/events/recent?limit=200'),
           fetch('/api/stats'),
           fetch('/api/stats/hourly'),
+          fetch('/api/stats/credentials'),
+          fetch('/api/stats/commands'),
         ])
         const events = await evRes.json()
         const stats = await stRes.json()
         const hourly = await hrRes.json()
+        const creds = await credRes.json()
+        const cmds = await cmdRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
         setTopIps(stats.top_ips || [])
+        setProtocolBreakdown(stats.protocol_breakdown || [])
+        setHoneypotBreakdown(stats.honeypot_breakdown || [])
         setHourlyData(hourly || [])
+        setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
+        setCommandsData(cmds || [])
         setLiveEvents(events.slice(0, 50))
         setArcs(events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` })))
       } catch {}
@@ -121,6 +133,10 @@ export default function App() {
         connected={connected}
         isMobile={isMobile}
         hourlyData={hourlyData}
+        credentialsData={credentialsData}
+        commandsData={commandsData}
+        protocolBreakdown={protocolBreakdown}
+        honeypotBreakdown={honeypotBreakdown}
       />
     </>
   )

@@ -271,6 +271,9 @@ export default function EventDetail({ event, onClose }) {
                 <span style={s.torBadge}>◉ TOR EXIT NODE</span>
               )}
             </div>
+            {event.threat_source && (
+              <Row label="INTEL SOURCE" value={event.threat_source} valueStyle={s.dimVal} />
+            )}
           </div>
         )}
 
