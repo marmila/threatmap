@@ -17,8 +17,10 @@ Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live 
 - Cowrie SSH honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
-- React frontend renders animated attack arcs on a 3D globe in real time via WebSocket
-- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect/closed=grey
+- React frontend renders animated attack arcs and a live heatmap on a 3D globe in real time via WebSocket
+- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey
+- Heatmap layer builds up on the globe surface showing attack origin density over the session
+- Hourly bar chart in the stats panel shows attack volume over the last 24 hours
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner in detail modal
 - Click any event in the live feed for full attack detail (credentials attempted, honeypot sensor, geo coords)
 
@@ -147,6 +149,7 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 |---|---|
 | `GET /api/events/recent?limit=200` | Last N enriched attack events from MongoDB |
 | `GET /api/stats` | Total event count + top 10 attacker countries + top 10 attacker IPs |
+| `GET /api/stats/hourly` | Attack count per hour for the last 24 hours (used by bar chart) |
 | `GET /api/ip/{ip}/stats` | Per-IP history: total attacks, first/last seen, event type breakdown |
 | `WS /ws/events` | Live event stream (JSON, one event per message) |
 | `GET /healthz` | Liveness probe |

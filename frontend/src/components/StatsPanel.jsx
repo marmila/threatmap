@@ -62,7 +62,39 @@ const s = {
   },
 }
 
-export default function StatsPanel({ events, total, topCountries, topIps = [], connected, isMobile = false }) {
+function HourlyChart({ data }) {
+  if (!data || data.length === 0) return null
+  const W = 248
+  const H = 44
+  const barW = W / 24
+  const max = Math.max(...data.map(d => d.count), 1)
+  const now = new Date()
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    const h = new Date(now)
+    h.setUTCMinutes(0, 0, 0)
+    h.setUTCHours(h.getUTCHours() - 23 + i)
+    const prefix = h.toISOString().substring(0, 13)
+    const found = data.find(d => d.hour && d.hour.startsWith(prefix))
+    return found ? found.count : 0
+  })
+  return (
+    <div style={{ marginBottom: '4px' }}>
+      <div style={s.label}>ATTACKS / HOUR (24H)</div>
+      <svg width={W} height={H} style={{ display: 'block', marginTop: '4px' }}>
+        {hours.map((count, i) => {
+          const barH = Math.max(2, (count / max) * (H - 4))
+          const opacity = 0.25 + 0.75 * (count / max)
+          return (
+            <rect key={i} x={i * barW + 1} y={H - barH} width={Math.max(1, barW - 2)} height={barH}
+              fill={`rgba(251,191,36,${opacity})`} rx={1} />
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+export default function StatsPanel({ events, total, topCountries, topIps = [], connected, isMobile = false, hourlyData = [] }) {
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
   const [selected, setSelected] = useState(null)
@@ -162,6 +194,9 @@ export default function StatsPanel({ events, total, topCountries, topIps = [], c
           )}
         </>
       )}
+
+      {/* Hourly chart — desktop only */}
+      {!isMobile && <HourlyChart data={hourlyData} />}
 
       {/* Live feed — shown on both mobile and desktop */}
       {!isMobile && <div style={s.section}><div style={s.label}>LIVE FEED</div></div>}

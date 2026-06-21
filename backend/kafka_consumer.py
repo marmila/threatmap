@@ -24,12 +24,13 @@ HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 # SSH negotiation noise — not useful for threat visualization
 _SKIP_EVENT_TYPES = {
     "cowrie.session.params",
+    "cowrie.session.closed",
     "cowrie.client.lex",
     "cowrie.client.size",
     "cowrie.client.var",
     "cowrie.client.fingerprint",
     "cowrie.client.version",
-    "cowrie.log.closed",  # old duplicate of cowrie.session.closed
+    "cowrie.log.closed",
 }
 
 

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -115,6 +116,25 @@ async def ip_stats(ip: str):
         "last_seen": max(r["last_seen"] for r in results),
         "event_breakdown": [{"event_type": r["_id"], "count": r["count"]} for r in results],
     }
+
+
+@app.get("/api/stats/hourly")
+async def hourly_stats():
+    db = get_db()
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": since}}},
+        {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp", "onError": None}}}},
+        {"$match": {"ts": {"$ne": None}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%dT%H:00:00Z", "date": "$ts"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+        {"$project": {"hour": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(24)
+    return results
 
 
 @app.get("/healthz")

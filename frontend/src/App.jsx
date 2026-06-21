@@ -43,6 +43,8 @@ export default function App() {
   const [topCountries, setTopCountries] = useState([])
   const [connected, setConnected] = useState(false)
   const [topIps, setTopIps] = useState([])
+  const [heatPoints, setHeatPoints] = useState([])
+  const [hourlyData, setHourlyData] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -54,6 +56,9 @@ export default function App() {
     })
 
     setLiveEvents((prev) => [event, ...prev].slice(0, 50))
+    if (event.src_lat && event.src_lon) {
+      setHeatPoints((prev) => [...prev, { lat: event.src_lat, lng: event.src_lon }].slice(-2000))
+    }
     setTotal((n) => n + 1)
     setTopCountries((prev) => {
       const map = Object.fromEntries(prev.map((c) => [c.country, c.count]))
@@ -79,26 +84,39 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [evRes, stRes] = await Promise.all([
+        const [evRes, stRes, hrRes] = await Promise.all([
           fetch('/api/events/recent?limit=200'),
           fetch('/api/stats'),
+          fetch('/api/stats/hourly'),
         ])
         const events = await evRes.json()
         const stats = await stRes.json()
+        const hourly = await hrRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
         setTopIps(stats.top_ips || [])
+        setHourlyData(hourly || [])
         setLiveEvents(events.slice(0, 50))
         setArcs(events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` })))
+        setHeatPoints(events.filter(e => e.src_lat && e.src_lon).map(e => ({ lat: e.src_lat, lng: e.src_lon })))
       } catch {}
     }
     load()
-    return () => arcTimers.current.forEach(clearTimeout)
+    const hourlyRefresh = setInterval(async () => {
+      try {
+        const r = await fetch('/api/stats/hourly')
+        setHourlyData(await r.json())
+      } catch {}
+    }, 600000)
+    return () => {
+      clearInterval(hourlyRefresh)
+      arcTimers.current.forEach(clearTimeout)
+    }
   }, [])
 
   return (
     <>
-      <GlobeMap arcs={arcs} />
+      <GlobeMap arcs={arcs} heatPoints={heatPoints} />
       {!isMobile && <Legend />}
       <StatsPanel
         events={liveEvents}
@@ -107,6 +125,7 @@ export default function App() {
         topIps={topIps}
         connected={connected}
         isMobile={isMobile}
+        hourlyData={hourlyData}
       />
     </>
   )
