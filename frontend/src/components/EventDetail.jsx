@@ -2,25 +2,35 @@ import { useEffect, useState } from 'react'
 import { useWindowSize } from '../hooks/useWindowSize.js'
 
 const EVENT_LABELS = {
-  'cowrie.login.success':   'LOGIN SUCCESS',
-  'cowrie.login.failed':    'LOGIN ATTEMPT',
-  'cowrie.session.connect': 'CONNECTION',
-  'cowrie.session.closed':  'SESSION CLOSED',
-  'cowrie.command.input':   'COMMAND EXECUTED',
-  'cowrie.command.failed':  'COMMAND FAILED',
-  'cowrie.command.success': 'COMMAND SUCCESS',
-  'cowrie.client.version':  'CLIENT HANDSHAKE',
+  'cowrie.login.success':      'LOGIN SUCCESS',
+  'cowrie.login.failed':       'LOGIN ATTEMPT',
+  'cowrie.session.connect':    'CONNECTION',
+  'cowrie.session.closed':     'SESSION CLOSED',
+  'cowrie.command.input':      'COMMAND EXECUTED',
+  'cowrie.command.failed':     'COMMAND FAILED',
+  'cowrie.command.success':    'COMMAND SUCCESS',
+  'cowrie.client.version':     'CLIENT HANDSHAKE',
+  'opencanary.http.request':   'HTTP PROBE',
+  'opencanary.ftp.login':      'FTP LOGIN',
+  'opencanary.mysql.login':    'MYSQL LOGIN',
+  'opencanary.ssh.login':      'SSH LOGIN',
+  'opencanary.telnet.login':   'TELNET LOGIN',
 }
 
 const EVENT_BADGE = {
-  'cowrie.login.success':   { bg: '#450a0a', color: '#ef4444' },
-  'cowrie.login.failed':    { bg: '#3d2700', color: '#fbbf24' },
-  'cowrie.command.input':   { bg: '#431407', color: '#f97316' },
-  'cowrie.command.failed':  { bg: '#431407', color: '#f97316' },
-  'cowrie.command.success': { bg: '#431407', color: '#f97316' },
-  'cowrie.session.connect': { bg: '#0f172a', color: '#64748b' },
-  'cowrie.session.closed':  { bg: '#0f172a', color: '#64748b' },
-  'cowrie.client.version':  { bg: '#0f172a', color: '#64748b' },
+  'cowrie.login.success':      { bg: '#450a0a', color: '#ef4444' },
+  'cowrie.login.failed':       { bg: '#3d2700', color: '#fbbf24' },
+  'cowrie.command.input':      { bg: '#431407', color: '#f97316' },
+  'cowrie.command.failed':     { bg: '#431407', color: '#f97316' },
+  'cowrie.command.success':    { bg: '#431407', color: '#f97316' },
+  'cowrie.session.connect':    { bg: '#0f172a', color: '#64748b' },
+  'cowrie.session.closed':     { bg: '#0f172a', color: '#64748b' },
+  'cowrie.client.version':     { bg: '#0f172a', color: '#64748b' },
+  'opencanary.http.request':   { bg: '#2e1065', color: '#a78bfa' },
+  'opencanary.ftp.login':      { bg: '#083344', color: '#22d3ee' },
+  'opencanary.mysql.login':    { bg: '#052e16', color: '#4ade80' },
+  'opencanary.ssh.login':      { bg: '#450a0a', color: '#ef4444' },
+  'opencanary.telnet.login':   { bg: '#2e1065', color: '#c4b5fd' },
 }
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
@@ -181,7 +191,7 @@ export default function EventDetail({ event, onClose }) {
             <Row
               label="PROTOCOL"
               value={event.protocol.toUpperCase()}
-              valueStyle={{ color: event.protocol === 'telnet' ? '#a78bfa' : '#60a5fa' }}
+              valueStyle={{ color: { ssh: '#60a5fa', telnet: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', http: '#c084fc' }[event.protocol] || '#60a5fa' }}
             />
           )}
         </div>
@@ -204,7 +214,7 @@ export default function EventDetail({ event, onClose }) {
             {ipStats.event_breakdown?.slice(0, 4).map(b => (
               <Row
                 key={b.event_type}
-                label={b.event_type.replace('cowrie.', '')}
+                label={b.event_type.replace(/^(cowrie|opencanary)\./, '')}
                 value={b.count.toLocaleString()}
                 valueStyle={s.dimVal}
               />

@@ -2,7 +2,7 @@
 
 ![ThreatMap Architecture](threatmap-architecture.png)
 
-Two Oracle Cloud VMs running Cowrie SSH + Telnet honeypots, shipping attack events into the homelab via WireGuard → Fluentd → Kafka.
+Two Oracle Cloud VMs running Cowrie SSH + Telnet honeypots and OpenCanary (HTTP/FTP/MySQL), shipping attack events into the homelab via WireGuard → Fluentd → Kafka.
 
 **VMs:**
 - `honeypot-eu-01` — VM.Standard.E2.1.Micro, x86_64, Ubuntu 22.04, `eu-milan-1`
@@ -285,6 +285,31 @@ Edit `/etc/fluent-bit/fluent-bit.conf`:
     Shared_Key    K7vAfNh3lqfpzve
     tls           On
     tls.verify    Off
+    time_as_integer On
+
+[INPUT]
+    Name              tail
+    Path              /var/lib/docker/volumes/opencanary-logs/_data/opencanary.log
+    Tag               opencanary
+    Parser            json
+    Read_from_Head    False
+    Refresh_Interval  5
+
+[FILTER]
+    Name   record_modifier
+    Match  opencanary
+    Record honeypot_host ${HOSTNAME}
+    Record honeypot_region eu-milan-1
+
+[OUTPUT]
+    Name          forward
+    Match         opencanary
+    Host          10.0.0.66
+    Port          24224
+    Shared_Key    K7vAfNh3lqfpzve
+    tls           On
+    tls.verify    Off
+    time_as_integer On
 ```
 
 > `10.0.0.66` is the Fluentd LoadBalancer, reachable via WireGuard.  
@@ -301,6 +326,71 @@ sudo systemctl status fluent-bit
 # Verify it's forwarding (watch for errors)
 sudo journalctl -u fluent-bit -f
 ```
+
+---
+
+## Part 5b — OpenCanary (HTTP / FTP / MySQL honeypot)
+
+OpenCanary runs alongside Cowrie on `honeypot-eu-01` and fakes a NAS login page (HTTP), FTP server, and MySQL server.
+
+### Open ports in OCI Security List
+
+Add ingress rules for TCP 80, 21, 3306 (source `0.0.0.0/0`).
+
+### iptables
+
+```bash
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 21 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 3306 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+### Config file
+
+```bash
+sudo mkdir -p /etc/opencanaryd
+sudo tee /etc/opencanaryd/opencanary.conf > /dev/null << 'EOF'
+{
+    "device.node_id": "opencanary-eu-01",
+    "logging.file": "/var/log/opencanary/opencanary.log",
+    "ftp.enabled": true,
+    "ftp.port": 21,
+    "http.enabled": true,
+    "http.port": 80,
+    "http.skin": "nasLogin",
+    "mysql.enabled": true,
+    "mysql.port": 3306,
+    "mysql.banner": "5.5.43-0ubuntu0.14.04.1"
+}
+EOF
+```
+
+### Run
+
+```bash
+docker volume create opencanary-logs
+
+docker run -d \
+  --name opencanary \
+  --restart unless-stopped \
+  --network host \
+  -v /etc/opencanaryd:/etc/opencanaryd \
+  -v opencanary-logs:/var/log/opencanary \
+  thinkst/opencanary:latest
+```
+
+### Verify
+
+```bash
+docker logs opencanary   # should show FTPFactory/HTTP/SQLFactory starting
+ls /var/lib/docker/volumes/opencanary-logs/_data/   # opencanary.log should appear
+```
+
+> OpenCanary config must be at `/etc/opencanaryd/opencanary.conf` (not `/etc/opencanary.conf`).  
+> `http.skin` must be `"nasLogin"` (not `"nasty"` — that skin doesn't exist).  
+> MySQL banner must be the full string `"5.5.43-0ubuntu0.14.04.1"`.  
+> Always use `docker stop && docker rm && docker run` (not `docker restart`) when changing config — restart keeps a stale PID file that blocks startup.
 
 ---
 
@@ -342,11 +432,14 @@ All steps above apply identically to both VMs. The only differences:
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
+| `21` | TCP | OpenCanary FTP |
 | `22` | TCP | Cowrie SSH (via iptables redirect → 2223) |
 | `23` | TCP | Cowrie Telnet (via iptables redirect → 2323) |
+| `80` | TCP | OpenCanary HTTP (fake NAS login) |
 | `2222` | TCP | Real SSH daemon |
 | `2223` | TCP | Cowrie SSH listener (internal) |
 | `2323` | TCP | Cowrie Telnet listener (internal) |
+| `3306` | TCP | OpenCanary MySQL |
 | `51820` | UDP | WireGuard client (outbound to homelab) |
 
 ---

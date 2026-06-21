@@ -5,20 +5,30 @@ import { useWindowSize } from '../hooks/useWindowSize.js'
 const ARC_LIFETIME_MS = 4000
 
 const ARC_COLORS = {
-  'cowrie.login.success':   ['rgba(239,68,68,0.9)',   'rgba(239,68,68,0)'],
-  'cowrie.login.failed':    ['rgba(251,191,36,0.8)',  'rgba(251,191,36,0)'],
-  'cowrie.command.input':   ['rgba(249,115,22,0.9)',  'rgba(249,115,22,0)'],
-  'cowrie.session.connect': ['rgba(100,116,139,0.5)', 'rgba(100,116,139,0)'],
-  'cowrie.session.closed':      ['rgba(100,116,139,0.4)', 'rgba(100,116,139,0)'],
+  'cowrie.login.success':      ['rgba(239,68,68,0.9)',   'rgba(239,68,68,0)'],
+  'cowrie.login.failed':       ['rgba(251,191,36,0.8)',  'rgba(251,191,36,0)'],
+  'cowrie.command.input':      ['rgba(249,115,22,0.9)',  'rgba(249,115,22,0)'],
+  'cowrie.session.connect':    ['rgba(100,116,139,0.5)', 'rgba(100,116,139,0)'],
+  'cowrie.session.closed':     ['rgba(100,116,139,0.4)', 'rgba(100,116,139,0)'],
+  'opencanary.http.request':   ['rgba(167,139,250,0.8)', 'rgba(167,139,250,0)'],
+  'opencanary.ftp.login':      ['rgba(34,211,238,0.8)',  'rgba(34,211,238,0)'],
+  'opencanary.mysql.login':    ['rgba(74,222,128,0.8)',  'rgba(74,222,128,0)'],
+  'opencanary.ssh.login':      ['rgba(239,68,68,0.9)',   'rgba(239,68,68,0)'],
+  'opencanary.telnet.login':   ['rgba(196,181,253,0.7)', 'rgba(196,181,253,0)'],
 }
 const DEFAULT_ARC = ['rgba(251,191,36,0.8)', 'rgba(251,191,36,0)']
 
 const POINT_COLORS = {
-  'cowrie.login.success':   'rgba(239,68,68,0.9)',
-  'cowrie.login.failed':    'rgba(251,191,36,0.7)',
-  'cowrie.command.input':   'rgba(249,115,22,0.9)',
-  'cowrie.session.connect': 'rgba(100,116,139,0.5)',
-  'cowrie.session.closed':      'rgba(100,116,139,0.4)',
+  'cowrie.login.success':      'rgba(239,68,68,0.9)',
+  'cowrie.login.failed':       'rgba(251,191,36,0.7)',
+  'cowrie.command.input':      'rgba(249,115,22,0.9)',
+  'cowrie.session.connect':    'rgba(100,116,139,0.5)',
+  'cowrie.session.closed':     'rgba(100,116,139,0.4)',
+  'opencanary.http.request':   'rgba(167,139,250,0.8)',
+  'opencanary.ftp.login':      'rgba(34,211,238,0.8)',
+  'opencanary.mysql.login':    'rgba(74,222,128,0.8)',
+  'opencanary.ssh.login':      'rgba(239,68,68,0.9)',
+  'opencanary.telnet.login':   'rgba(196,181,253,0.7)',
 }
 const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 

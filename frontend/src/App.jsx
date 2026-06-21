@@ -8,10 +8,13 @@ const MAX_ARCS = 300
 const ARC_TTL_MS = 8000
 
 const LEGEND_ITEMS = [
-  { color: '#ef4444', label: 'Login success' },
+  { color: '#ef4444', label: 'Login success / SSH' },
   { color: '#f97316', label: 'Command executed' },
   { color: '#fbbf24', label: 'Login attempt' },
   { color: '#64748b', label: 'Connection' },
+  { color: '#a78bfa', label: 'HTTP probe' },
+  { color: '#22d3ee', label: 'FTP login' },
+  { color: '#4ade80', label: 'MySQL login' },
 ]
 
 function Legend() {

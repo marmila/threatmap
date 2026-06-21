@@ -14,11 +14,11 @@ Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live 
 
 ## What it does
 
-- Cowrie SSH+Telnet honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
+- Cowrie SSH+Telnet honeypots and OpenCanary (HTTP/FTP/MySQL) on Oracle Cloud (eu-milan-1) capture real attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
 - React frontend renders animated attack arcs on a 3D globe in real time via WebSocket, with floating country/city labels at attack origins
-- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey
+- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey, http=purple, ftp=cyan, mysql=green
 - Hourly bar chart in the stats panel shows attack volume over the last 24 hours
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner + intel source name in detail modal
 - Returning attackers flagged with RPT badge in the live feed (in-session detection)
@@ -33,7 +33,7 @@ Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live 
 
 | Layer | Technology |
 |---|---|
-| Honeypots | Cowrie (Docker, `--network host`) on Oracle Cloud E2.1.Micro |
+| Honeypots | Cowrie SSH+Telnet + OpenCanary HTTP/FTP/MySQL (Docker, `--network host`) on Oracle Cloud E2.1.Micro |
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
@@ -210,6 +210,9 @@ Each event (WebSocket or REST) contains:
 | `cowrie.login.failed` | Amber | Brute-force attempt |
 | `cowrie.command.input` | Orange | Active session, commands executed |
 | `cowrie.session.connect` / `cowrie.session.closed` | Grey | Connection noise, not interesting |
+| `opencanary.http.request` | Purple | HTTP probe against fake NAS login page |
+| `opencanary.ftp.login` | Cyan | FTP login attempt |
+| `opencanary.mysql.login` | Green | MySQL login attempt |
 
 ---
 

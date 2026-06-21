@@ -21,8 +21,15 @@ KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD", "")
 HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
-# SSH negotiation noise — not useful for threat visualization
 _seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning attacker detection)
+
+_OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
+    1000: ("opencanary.ssh.login", "ssh"),
+    2000: ("opencanary.telnet.login", "telnet"),
+    3000: ("opencanary.http.request", "http"),
+    4000: ("opencanary.ftp.login", "ftp"),
+    5000: ("opencanary.mysql.login", "mysql"),
+}
 
 _SKIP_EVENT_TYPES = {
     "cowrie.session.params",
@@ -76,6 +83,9 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
 
 
 def _enrich(raw: dict) -> dict | None:
+    if "logtype" in raw:
+        return _enrich_opencanary(raw)
+
     src_ip = raw.get("src_ip")
     if not src_ip:
         return None
@@ -110,6 +120,73 @@ def _enrich(raw: dict) -> dict | None:
         "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
         "protocol": raw.get("protocol", "ssh"),
+        "known_threat": otx_threat or abuse_threat,
+        "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
+        "is_returning": prev_count > 0,
+        "previous_count": prev_count,
+        "abuse_score": abuse_data.get("score", 0),
+        "abuse_total_reports": abuse_data.get("total_reports", 0),
+        "abuse_distinct_users": abuse_data.get("distinct_users", 0),
+        "abuse_last_reported": abuse_data.get("last_reported"),
+        "abuse_isp": abuse_data.get("isp"),
+        "abuse_usage_type": abuse_data.get("usage_type"),
+        "abuse_is_tor": abuse_data.get("is_tor", False),
+        "shodan_ports": shodan_data.get("ports", []),
+        "shodan_tags": shodan_data.get("tags", []),
+        "shodan_vulns": shodan_data.get("vulns", []),
+        "shodan_org": shodan_data.get("org"),
+        "shodan_hostnames": shodan_data.get("hostnames", []),
+        "shodan_os": shodan_data.get("os"),
+        "shodan_last_update": shodan_data.get("last_update"),
+    }
+
+
+def _enrich_opencanary(raw: dict) -> dict | None:
+    src_ip = raw.get("src_host", "")
+    if not src_ip:
+        return None
+
+    logtype = raw.get("logtype")
+    event_type, protocol = _OPENCANARY_LOGTYPES.get(logtype, ("opencanary.unknown", "unknown"))
+
+    logdata = raw.get("logdata") or {}
+    username = logdata.get("USERNAME") or logdata.get("USER")
+    password = logdata.get("PASSWORD")
+
+    utc_time = raw.get("utc_time", "")
+    try:
+        ts = datetime.strptime(utc_time, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=timezone.utc).isoformat()
+    except (ValueError, TypeError):
+        ts = datetime.now(timezone.utc).isoformat()
+
+    geo = lookup(src_ip)
+    if not geo:
+        return None
+
+    otx_threat, threat_source = is_known_threat(src_ip)
+    abuse_threat, abuse_data = check_abuseipdb(src_ip)
+    shodan_data = check_shodan(src_ip)
+
+    prev_count = _seen_ips.get(src_ip, 0)
+    _seen_ips[src_ip] = prev_count + 1
+
+    return {
+        "timestamp": ts,
+        "src_ip": src_ip,
+        "src_lat": geo["lat"],
+        "src_lon": geo["lon"],
+        "src_country": geo["country"],
+        "src_country_code": geo["country_code"],
+        "src_city": geo.get("city"),
+        "dst_lat": HOME_LAT,
+        "dst_lon": HOME_LON,
+        "event_type": event_type,
+        "username": username,
+        "password": password,
+        "command": None,
+        "duration": None,
+        "honeypot": raw.get("honeypot_host"),
+        "protocol": protocol,
         "known_threat": otx_threat or abuse_threat,
         "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
         "is_returning": prev_count > 0,
