@@ -192,9 +192,10 @@ export default function StatsPanel({
   )
 
   if (isMobile) {
+    const sheetHeight = activeTab === 'feed' ? '50vh' : '85vh'
     return (
       <>
-        <div style={s.sheet}>
+        <div style={{ ...s.sheet, maxHeight: sheetHeight }}>
           <div style={s.handle} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={s.title}>THREATMAP</div>
@@ -217,8 +218,99 @@ export default function StatsPanel({
               ))}
             </div>
           )}
-          <div style={s.label}>LIVE FEED</div>
-          {feedItems}
+          <div style={{ display: 'flex', borderBottom: '1px solid #1e2535', marginBottom: '4px', flexShrink: 0 }}>
+            <Tab label="FEED" active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+            <Tab label="STATS" active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} />
+            <Tab label="INTEL" active={activeTab === 'intel'} onClick={() => setActiveTab('intel')} />
+          </div>
+
+          {activeTab === 'feed' && feedItems}
+
+          {activeTab === 'stats' && (
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+              {topCountries.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP SOURCES</div>
+                  {topCountries.slice(0, 5).map((c) => (
+                    <div key={c.country}>
+                      <div style={s.row}>
+                        <span style={s.country}>{c.country || 'Unknown'}</span>
+                        <span style={s.count}>{c.count.toLocaleString()}</span>
+                      </div>
+                      <div style={s.bar}><div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {topIps.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP IPs</div>
+                  {topIps.slice(0, 5).map((entry) => (
+                    <div key={entry.ip}>
+                      <div style={s.row}>
+                        <span style={s.ipAddr}>{entry.ip}{entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}</span>
+                        <span style={s.count}>{entry.count.toLocaleString()}</span>
+                      </div>
+                      <div style={s.bar}><div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <HourlyChart data={hourlyData} />
+              {honeypotBreakdown.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>SENSORS</div>
+                  {honeypotBreakdown.map(h => (
+                    <div key={h.honeypot} style={s.row}>
+                      <span style={s.country}>{h.honeypot || 'unknown'}</span>
+                      <span style={s.count}>{h.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'intel' && (
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+              {(credentialsData.top_usernames?.length > 0 || credentialsData.top_passwords?.length > 0) && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP CREDENTIALS</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                    <div>
+                      <div style={{ ...s.subLabel, color: '#60a5fa' }}>USERNAMES</div>
+                      {credentialsData.top_usernames?.slice(0, 6).map((u, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
+                          <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{ ...s.subLabel, color: '#fb923c' }}>PASSWORDS</div>
+                      {credentialsData.top_passwords?.slice(0, 6).map((p, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
+                          <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {commandsData.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP COMMANDS</div>
+                  {commandsData.slice(0, 6).map((c, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                      <span style={{ color: '#f97316', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <EventDetail event={selected} onClose={() => setSelected(null)} />
       </>
