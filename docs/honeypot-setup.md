@@ -329,9 +329,9 @@ sudo journalctl -u fluent-bit -f
 
 ---
 
-## Part 5b — OpenCanary (HTTP / FTP / MySQL honeypot)
+## Part 5b — OpenCanary (HTTP / FTP / MySQL / Redis honeypot)
 
-OpenCanary runs alongside Cowrie on `honeypot-eu-01` and fakes a NAS login page (HTTP), FTP server, and MySQL server.
+OpenCanary runs alongside Cowrie on `honeypot-eu-01` and fakes a NAS login page (HTTP), FTP server, MySQL server, and Redis server.
 
 ### Open ports in OCI Security List
 
@@ -401,7 +401,7 @@ docker run -d \
 ### Verify
 
 ```bash
-docker logs opencanary   # should show FTPFactory/HTTP/SQLFactory starting
+docker logs opencanary   # should show FTPFactory/HTTP/SQLFactory/RedisFactory starting
 ls /var/lib/docker/volumes/opencanary-logs/_data/   # opencanary.log should appear
 ```
 
