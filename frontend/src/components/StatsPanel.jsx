@@ -6,6 +6,9 @@ const eventColor = (t) => {
   if (t.includes('login.success')) return '#ef4444'
   if (t.includes('command.input')) return '#f97316'
   if (t.includes('session.connect') || t.includes('session.closed')) return '#64748b'
+  if (t.includes('http')) return '#a78bfa'
+  if (t.includes('ftp')) return '#22d3ee'
+  if (t.includes('mysql')) return '#4ade80'
   return '#fbbf24'
 }
 
@@ -181,6 +184,9 @@ export default function StatsPanel({
               {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
               {e.is_returning && <span style={{ ...s.badge, background: '#1c1917', color: '#a8a29e' }}>RPT</span>}
               {e.protocol === 'telnet' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>TEL</span>}
+              {e.protocol === 'http' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>HTTP</span>}
+              {e.protocol === 'ftp' && <span style={{ ...s.badge, background: '#083344', color: '#22d3ee' }}>FTP</span>}
+              {e.protocol === 'mysql' && <span style={{ ...s.badge, background: '#052e16', color: '#4ade80' }}>SQL</span>}
               {e.known_threat && <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>}
             </div>
           </div>
@@ -209,9 +215,9 @@ export default function StatsPanel({
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: p.protocol === 'telnet' ? '#2e1065' : '#0f172a',
-                  color: p.protocol === 'telnet' ? '#a78bfa' : '#60a5fa',
-                  border: `1px solid ${p.protocol === 'telnet' ? '#4c1d95' : '#1e3a5f'}`,
+                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16' }[p.protocol] || '#0f172a',
+                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80' }[p.protocol] || '#60a5fa',
+                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d' }[p.protocol] || '#1e3a5f'}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
@@ -337,9 +343,9 @@ export default function StatsPanel({
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: p.protocol === 'telnet' ? '#2e1065' : '#0f172a',
-                  color: p.protocol === 'telnet' ? '#a78bfa' : '#60a5fa',
-                  border: `1px solid ${p.protocol === 'telnet' ? '#4c1d95' : '#1e3a5f'}`,
+                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16' }[p.protocol] || '#0f172a',
+                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80' }[p.protocol] || '#60a5fa',
+                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d' }[p.protocol] || '#1e3a5f'}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
