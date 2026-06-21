@@ -96,12 +96,20 @@ async def stats():
         {"$sort": {"count": -1}},
         {"$project": {"honeypot": "$_id", "count": 1, "_id": 0}},
     ]
+    event_type_pipeline = [
+        {"$match": {"event_type": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$event_type", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"event_type": "$_id", "count": 1, "_id": 0}},
+    ]
 
-    top_countries, top_ips, protocol_breakdown, honeypot_breakdown = await asyncio.gather(
+    top_countries, top_ips, protocol_breakdown, honeypot_breakdown, event_type_breakdown = await asyncio.gather(
         db.events.aggregate(country_pipeline).to_list(10),
         db.events.aggregate(ip_pipeline).to_list(10),
         db.events.aggregate(protocol_pipeline).to_list(10),
         db.events.aggregate(honeypot_pipeline).to_list(10),
+        db.events.aggregate(event_type_pipeline).to_list(10),
     )
     return {
         "total": total,
@@ -109,6 +117,7 @@ async def stats():
         "top_ips": top_ips,
         "protocol_breakdown": protocol_breakdown,
         "honeypot_breakdown": honeypot_breakdown,
+        "event_type_breakdown": event_type_breakdown,
     }
 
 
@@ -147,7 +156,7 @@ async def credentials_stats():
         {"$project": {"username": "$_id", "count": 1, "_id": 0}},
     ]
     password_pipeline = [
-        {"$match": {"password": {"$nin": [None, ""]}}},
+        {"$match": {"password": {"$nin": [None, ""], "$not": {"$regex": "^[0-9a-f]{40}$"}}}},
         {"$group": {"_id": "$password", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
         {"$limit": 10},

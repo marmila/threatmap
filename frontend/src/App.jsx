@@ -51,6 +51,7 @@ export default function App() {
   const [commandsData, setCommandsData] = useState([])
   const [protocolBreakdown, setProtocolBreakdown] = useState([])
   const [honeypotBreakdown, setHoneypotBreakdown] = useState([])
+  const [eventTypeBreakdown, setEventTypeBreakdown] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -104,6 +105,7 @@ export default function App() {
         setTopIps(stats.top_ips || [])
         setProtocolBreakdown(stats.protocol_breakdown || [])
         setHoneypotBreakdown(stats.honeypot_breakdown || [])
+        setEventTypeBreakdown(stats.event_type_breakdown || [])
         setHourlyData(hourly || [])
         setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
         setCommandsData(cmds || [])
@@ -140,6 +142,7 @@ export default function App() {
         commandsData={commandsData}
         protocolBreakdown={protocolBreakdown}
         honeypotBreakdown={honeypotBreakdown}
+        eventTypeBreakdown={eventTypeBreakdown}
       />
     </>
   )

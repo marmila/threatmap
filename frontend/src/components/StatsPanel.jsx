@@ -139,10 +139,21 @@ function HourlyChart({ data }) {
   )
 }
 
+const TYPE_COLOR = (t) => {
+  if (!t) return '#fbbf24'
+  if (t.includes('login.success') || t.includes('ssh.login')) return '#ef4444'
+  if (t.includes('command.input')) return '#f97316'
+  if (t.includes('session')) return '#64748b'
+  if (t.includes('http')) return '#a78bfa'
+  if (t.includes('ftp')) return '#22d3ee'
+  if (t.includes('mysql')) return '#4ade80'
+  return '#fbbf24'
+}
+
 export default function StatsPanel({
   events, total, topCountries, topIps = [], connected, isMobile = false,
   hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] },
-  commandsData = [], protocolBreakdown = [], honeypotBreakdown = [],
+  commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
@@ -270,6 +281,20 @@ export default function StatsPanel({
                     <div key={h.honeypot} style={s.row}>
                       <span style={s.country}>{h.honeypot || 'unknown'}</span>
                       <span style={s.count}>{h.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {eventTypeBreakdown.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>ATTACK TYPES</div>
+                  {eventTypeBreakdown.map(e => (
+                    <div key={e.event_type} style={s.row}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
+                        <span style={{ color: '#94a3b8', fontSize: '9px' }}>{e.event_type.replace(/^(cowrie|opencanary)\./, '')}</span>
+                      </span>
+                      <span style={s.count}>{e.count.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
@@ -419,6 +444,20 @@ export default function StatsPanel({
                   <div key={h.honeypot} style={s.row}>
                     <span style={s.country}>{h.honeypot || 'unknown'}</span>
                     <span style={s.count}>{h.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {eventTypeBreakdown.length > 0 && (
+              <div style={s.section}>
+                <div style={s.label}>ATTACK TYPES</div>
+                {eventTypeBreakdown.map(e => (
+                  <div key={e.event_type} style={s.row}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
+                      <span style={{ color: '#94a3b8', fontSize: '9px' }}>{e.event_type.replace(/^(cowrie|opencanary)\./, '')}</span>
+                    </span>
+                    <span style={s.count}>{e.count.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
