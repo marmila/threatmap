@@ -24,13 +24,13 @@ HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 _seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning attacker detection)
 
 _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
-    1000: ("opencanary.ssh.login", "ssh"),
     2000: ("opencanary.ftp.login", "ftp"),
     3000: ("opencanary.http.request", "http"),
-    3001: ("opencanary.http.request", "http"),  # 3000=page hit, 3001=credential POST
+    3001: ("opencanary.http.request", "http"),  # 3001=credential POST, 3000=page hit
     4000: ("opencanary.http_proxy.request", "http"),
-    5000: ("opencanary.mysql.login", "mysql"),
-    6000: ("opencanary.telnet.login", "telnet"),
+    4002: ("opencanary.ssh.login", "ssh"),
+    6001: ("opencanary.telnet.login", "telnet"),
+    8001: ("opencanary.mysql.login", "mysql"),
 }
 
 _SKIP_EVENT_TYPES = {
