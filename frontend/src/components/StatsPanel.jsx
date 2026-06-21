@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import EventDetail from './EventDetail.jsx'
 
 const eventColor = (t) => {
@@ -63,10 +63,13 @@ const s = {
 }
 
 function HourlyChart({ data }) {
-  if (!data || data.length === 0) return null
+  const [hovered, setHovered] = useState(null)
   const W = 248
   const H = 44
   const barW = W / 24
+
+  if (!data || data.length === 0) return null
+
   const max = Math.max(...data.map(d => d.count), 1)
   const now = new Date()
   const hours = Array.from({ length: 24 }, (_, i) => {
@@ -75,20 +78,48 @@ function HourlyChart({ data }) {
     h.setUTCHours(h.getUTCHours() - 23 + i)
     const prefix = h.toISOString().substring(0, 13)
     const found = data.find(d => d.hour && d.hour.startsWith(prefix))
-    return found ? found.count : 0
+    const label = `${String(h.getUTCHours()).padStart(2, '0')}:00`
+    return { count: found ? found.count : 0, label }
   })
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const idx = Math.max(0, Math.min(23, Math.floor(x / barW)))
+    setHovered(idx)
+  }
+
+  const tip = hovered !== null ? hours[hovered] : null
+  const tipX = hovered !== null ? Math.min(hovered * barW, W - 72) : 0
+  const tipBarH = tip ? Math.max(2, (tip.count / max) * (H - 4)) : 0
+  const tipY = tip ? Math.max(0, H - tipBarH - 20) : 0
+
   return (
     <div style={{ marginBottom: '4px' }}>
       <div style={s.label}>ATTACKS / HOUR (24H)</div>
-      <svg width={W} height={H} style={{ display: 'block', marginTop: '4px' }}>
-        {hours.map((count, i) => {
+      <svg width={W} height={H} style={{ display: 'block', marginTop: '4px', cursor: 'crosshair' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHovered(null)}>
+        {hours.map(({ count }, i) => {
           const barH = Math.max(2, (count / max) * (H - 4))
-          const opacity = 0.25 + 0.75 * (count / max)
+          const isHov = hovered === i
           return (
-            <rect key={i} x={i * barW + 1} y={H - barH} width={Math.max(1, barW - 2)} height={barH}
-              fill={`rgba(251,191,36,${opacity})`} rx={1} />
+            <rect key={i} x={i * barW + 1} y={H - barH}
+              width={Math.max(1, barW - 2)} height={barH}
+              fill={`rgba(251,191,36,${isHov ? 1 : 0.25 + 0.75 * (count / max)})`}
+              rx={1} />
           )
         })}
+        {tip && (
+          <g>
+            <rect x={tipX} y={tipY} width={70} height={15} rx={2}
+              fill="#0f1117" stroke="#334155" strokeWidth={0.5} />
+            <text x={tipX + 4} y={tipY + 10}
+              fill="#fbbf24" fontSize="8" fontFamily="Courier New,monospace">
+              {tip.label} · {tip.count.toLocaleString()}
+            </text>
+          </g>
+        )}
       </svg>
     </div>
   )
