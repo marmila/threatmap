@@ -25,10 +25,11 @@ _seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning
 
 _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     1000: ("opencanary.ssh.login", "ssh"),
-    2000: ("opencanary.telnet.login", "telnet"),
+    2000: ("opencanary.ftp.login", "ftp"),
     3000: ("opencanary.http.request", "http"),
-    4000: ("opencanary.ftp.login", "ftp"),
+    4000: ("opencanary.http_proxy.request", "http"),
     5000: ("opencanary.mysql.login", "mysql"),
+    6000: ("opencanary.telnet.login", "telnet"),
 }
 
 _SKIP_EVENT_TYPES = {
