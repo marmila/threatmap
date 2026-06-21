@@ -353,7 +353,22 @@ sudo mkdir -p /etc/opencanaryd
 sudo tee /etc/opencanaryd/opencanary.conf > /dev/null << 'EOF'
 {
     "device.node_id": "opencanary-eu-01",
-    "logging.file": "/var/log/opencanary/opencanary.log",
+    "logger": {
+        "class": "PyLogger",
+        "kwargs": {
+            "formatters": {
+                "plain": {
+                    "format": "%(message)s"
+                }
+            },
+            "handlers": {
+                "file": {
+                    "class": "logging.FileHandler",
+                    "filename": "/var/log/opencanary/opencanary.log"
+                }
+            }
+        }
+    },
     "ftp.enabled": true,
     "ftp.port": 21,
     "http.enabled": true,
