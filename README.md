@@ -17,9 +17,8 @@ Real-time global attack visualization - SSH honeypots on Oracle Cloud feed live 
 - Cowrie SSH honeypots on Oracle Cloud (eu-milan-1) capture real brute-force attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
-- React frontend renders animated attack arcs and a live heatmap on a 3D globe in real time via WebSocket
+- React frontend renders animated attack arcs on a 3D globe in real time via WebSocket
 - Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey
-- Heatmap layer builds up on the globe surface showing attack origin density over the session
 - Hourly bar chart in the stats panel shows attack volume over the last 24 hours
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner in detail modal
 - Click any event in the live feed for full attack detail (credentials attempted, honeypot sensor, geo coords)

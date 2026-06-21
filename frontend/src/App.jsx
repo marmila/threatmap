@@ -43,7 +43,6 @@ export default function App() {
   const [topCountries, setTopCountries] = useState([])
   const [connected, setConnected] = useState(false)
   const [topIps, setTopIps] = useState([])
-  const [heatPoints, setHeatPoints] = useState([])
   const [hourlyData, setHourlyData] = useState([])
   const arcTimers = useRef([])
 
@@ -56,9 +55,6 @@ export default function App() {
     })
 
     setLiveEvents((prev) => [event, ...prev].slice(0, 50))
-    if (event.src_lat && event.src_lon) {
-      setHeatPoints((prev) => [...prev, { lat: event.src_lat, lng: event.src_lon }].slice(-2000))
-    }
     setTotal((n) => n + 1)
     setTopCountries((prev) => {
       const map = Object.fromEntries(prev.map((c) => [c.country, c.count]))
@@ -98,7 +94,6 @@ export default function App() {
         setHourlyData(hourly || [])
         setLiveEvents(events.slice(0, 50))
         setArcs(events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` })))
-        setHeatPoints(events.filter(e => e.src_lat && e.src_lon).map(e => ({ lat: e.src_lat, lng: e.src_lon })))
       } catch {}
     }
     load()
@@ -116,7 +111,7 @@ export default function App() {
 
   return (
     <>
-      <GlobeMap arcs={arcs} heatPoints={heatPoints} />
+      <GlobeMap arcs={arcs} />
       {!isMobile && <Legend />}
       <StatsPanel
         events={liveEvents}
