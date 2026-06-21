@@ -15,6 +15,7 @@ const LEGEND_ITEMS = [
   { color: '#a78bfa', label: 'HTTP probe' },
   { color: '#22d3ee', label: 'FTP login' },
   { color: '#4ade80', label: 'MySQL login' },
+  { color: '#fb923c', label: 'Redis command' },
 ]
 
 function Legend() {
@@ -52,6 +53,7 @@ export default function App() {
   const [protocolBreakdown, setProtocolBreakdown] = useState([])
   const [honeypotBreakdown, setHoneypotBreakdown] = useState([])
   const [eventTypeBreakdown, setEventTypeBreakdown] = useState([])
+  const [httpPathsData, setHttpPathsData] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -88,24 +90,27 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [evRes, stRes, hrRes, credRes, cmdRes] = await Promise.all([
+        const [evRes, stRes, hrRes, credRes, cmdRes, pathsRes] = await Promise.all([
           fetch('/api/events/recent?limit=200'),
           fetch('/api/stats'),
           fetch('/api/stats/hourly'),
           fetch('/api/stats/credentials'),
           fetch('/api/stats/commands'),
+          fetch('/api/stats/http-paths'),
         ])
         const events = await evRes.json()
         const stats = await stRes.json()
         const hourly = await hrRes.json()
         const creds = await credRes.json()
         const cmds = await cmdRes.json()
+        const paths = await pathsRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
         setTopIps(stats.top_ips || [])
         setProtocolBreakdown(stats.protocol_breakdown || [])
         setHoneypotBreakdown(stats.honeypot_breakdown || [])
         setEventTypeBreakdown(stats.event_type_breakdown || [])
+        setHttpPathsData(paths || [])
         setHourlyData(hourly || [])
         setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
         setCommandsData(cmds || [])
@@ -143,6 +148,7 @@ export default function App() {
         protocolBreakdown={protocolBreakdown}
         honeypotBreakdown={honeypotBreakdown}
         eventTypeBreakdown={eventTypeBreakdown}
+        httpPathsData={httpPathsData}
       />
     </>
   )

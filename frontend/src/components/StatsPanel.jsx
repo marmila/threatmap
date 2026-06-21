@@ -9,6 +9,7 @@ const eventColor = (t) => {
   if (t.includes('http')) return '#a78bfa'
   if (t.includes('ftp')) return '#22d3ee'
   if (t.includes('mysql')) return '#4ade80'
+  if (t.includes('redis')) return '#fb923c'
   return '#fbbf24'
 }
 
@@ -147,6 +148,7 @@ const TYPE_COLOR = (t) => {
   if (t.includes('http')) return '#a78bfa'
   if (t.includes('ftp')) return '#22d3ee'
   if (t.includes('mysql')) return '#4ade80'
+  if (t.includes('redis')) return '#fb923c'
   return '#fbbf24'
 }
 
@@ -154,18 +156,21 @@ export default function StatsPanel({
   events, total, topCountries, topIps = [], connected, isMobile = false,
   hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] },
   commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
+  httpPathsData = [],
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
+  const [countryFilter, setCountryFilter] = useState(null)
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
 
   const dedupedFeed = useMemo(() => {
+    const source = countryFilter ? events.filter(e => e.src_country === countryFilter) : events
     const seen = new Set()
     const result = []
     const ipCounts = {}
-    for (const e of events) ipCounts[e.src_ip] = (ipCounts[e.src_ip] || 0) + 1
-    for (const e of events) {
+    for (const e of source) ipCounts[e.src_ip] = (ipCounts[e.src_ip] || 0) + 1
+    for (const e of source) {
       if (!seen.has(e.src_ip)) {
         result.push({ ...e, _count: ipCounts[e.src_ip] })
         seen.add(e.src_ip)
@@ -173,7 +178,7 @@ export default function StatsPanel({
       if (result.length >= (isMobile ? 15 : 25)) break
     }
     return result
-  }, [events, isMobile])
+  }, [events, isMobile, countryFilter])
 
   const filteredProtocol = protocolBreakdown.filter(p => p.protocol && p.protocol !== 'unknown')
 
@@ -185,6 +190,12 @@ export default function StatsPanel({
 
   const feedItems = (
     <div style={s.feed}>
+      {countryFilter && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <span style={{ color: '#94a3b8', fontSize: '9px' }}>▶ {countryFilter}</span>
+          <button onClick={() => setCountryFilter(null)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', fontSize: '9px', letterSpacing: '1px' }}>✕ CLEAR</button>
+        </div>
+      )}
       {dedupedFeed.map((e, i) => (
         <div key={i}
           style={{ ...s.event, borderLeft: `2px solid ${eventColor(e.event_type)}` }}
@@ -193,11 +204,13 @@ export default function StatsPanel({
             <span>{e.src_ip}</span>
             <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
               {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
+              {e.is_hot && <span style={{ ...s.badge, background: '#7c2d12', color: '#fb923c' }}>HOT</span>}
               {e.is_returning && <span style={{ ...s.badge, background: '#1c1917', color: '#a8a29e' }}>RPT</span>}
               {e.protocol === 'telnet' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>TEL</span>}
               {e.protocol === 'http' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>HTTP</span>}
               {e.protocol === 'ftp' && <span style={{ ...s.badge, background: '#083344', color: '#22d3ee' }}>FTP</span>}
               {e.protocol === 'mysql' && <span style={{ ...s.badge, background: '#052e16', color: '#4ade80' }}>SQL</span>}
+              {e.protocol === 'redis' && <span style={{ ...s.badge, background: '#431407', color: '#fb923c' }}>RDB</span>}
               {e.known_threat && <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>}
             </div>
           </div>
@@ -226,9 +239,9 @@ export default function StatsPanel({
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16' }[p.protocol] || '#0f172a',
-                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80' }[p.protocol] || '#60a5fa',
-                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d' }[p.protocol] || '#1e3a5f'}`,
+                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16', redis: '#431407' }[p.protocol] || '#0f172a',
+                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', redis: '#fb923c' }[p.protocol] || '#60a5fa',
+                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d', redis: '#7c2d12' }[p.protocol] || '#1e3a5f'}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
@@ -249,9 +262,9 @@ export default function StatsPanel({
                 <div style={s.section}>
                   <div style={s.label}>TOP SOURCES</div>
                   {topCountries.slice(0, 5).map((c) => (
-                    <div key={c.country}>
+                    <div key={c.country} style={{ cursor: 'pointer' }} onClick={() => { setCountryFilter(c.country); setActiveTab('feed') }}>
                       <div style={s.row}>
-                        <span style={s.country}>{c.country || 'Unknown'}</span>
+                        <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{c.country || 'Unknown'}</span>
                         <span style={s.count}>{c.count.toLocaleString()}</span>
                       </div>
                       <div style={s.bar}><div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} /></div>
@@ -340,6 +353,17 @@ export default function StatsPanel({
                   ))}
                 </div>
               )}
+              {httpPathsData.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP PATHS PROBED</div>
+                  {httpPathsData.slice(0, 6).map((p, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                      <span style={{ color: '#a78bfa', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{p.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -368,9 +392,9 @@ export default function StatsPanel({
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16' }[p.protocol] || '#0f172a',
-                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80' }[p.protocol] || '#60a5fa',
-                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d' }[p.protocol] || '#1e3a5f'}`,
+                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16', redis: '#431407' }[p.protocol] || '#0f172a',
+                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', redis: '#fb923c' }[p.protocol] || '#60a5fa',
+                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d', redis: '#7c2d12' }[p.protocol] || '#1e3a5f'}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
@@ -400,9 +424,9 @@ export default function StatsPanel({
               <div style={s.section}>
                 <div style={s.label}>TOP SOURCES</div>
                 {topCountries.slice(0, 5).map((c) => (
-                  <div key={c.country}>
+                  <div key={c.country} style={{ cursor: 'pointer' }} onClick={() => { setCountryFilter(c.country); setActiveTab('feed') }}>
                     <div style={s.row}>
-                      <span style={s.country}>{c.country || 'Unknown'}</span>
+                      <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{c.country || 'Unknown'}</span>
                       <span style={s.count}>{c.count.toLocaleString()}</span>
                     </div>
                     <div style={s.bar}>
@@ -501,6 +525,17 @@ export default function StatsPanel({
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ color: '#f97316', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
                     <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {httpPathsData.length > 0 && (
+              <div style={s.section}>
+                <div style={s.label}>TOP PATHS PROBED</div>
+                {httpPathsData.slice(0, 8).map((p, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ color: '#a78bfa', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{p.count}</span>
                   </div>
                 ))}
               </div>

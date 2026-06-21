@@ -183,6 +183,20 @@ async def commands_stats():
     return results
 
 
+@app.get("/api/stats/http-paths")
+async def http_paths_stats():
+    db = get_db()
+    pipeline = [
+        {"$match": {"event_type": "opencanary.http.request", "path": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$path", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 15},
+        {"$project": {"path": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(15)
+    return results
+
+
 @app.get("/api/stats/hourly")
 async def hourly_stats():
     db = get_db()

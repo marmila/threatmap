@@ -22,6 +22,7 @@ HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
 _seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning attacker detection)
+_ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
 
 _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     2000: ("opencanary.ftp.login", "ftp"),
@@ -31,7 +32,18 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     4002: ("opencanary.ssh.login", "ssh"),
     6001: ("opencanary.telnet.login", "telnet"),
     8001: ("opencanary.mysql.login", "mysql"),
+    9001: ("opencanary.redis.command", "redis"),
 }
+
+
+def _check_velocity(ip: str) -> bool:
+    now = time.time()
+    cutoff = now - 60.0
+    ts = _ip_timestamps.get(ip, [])
+    ts = [t for t in ts if t > cutoff]
+    ts.append(now)
+    _ip_timestamps[ip] = ts
+    return len(ts) > 10
 
 _SKIP_EVENT_TYPES = {
     "cowrie.session.params",
@@ -104,6 +116,7 @@ def _enrich(raw: dict) -> dict | None:
 
     prev_count = _seen_ips.get(src_ip, 0)
     _seen_ips[src_ip] = prev_count + 1
+    is_hot = _check_velocity(src_ip)
 
     return {
         "timestamp": raw.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -119,9 +132,11 @@ def _enrich(raw: dict) -> dict | None:
         "username": raw.get("username"),
         "password": raw.get("password"),
         "command": raw.get("input"),
+        "path": None,
         "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
         "protocol": raw.get("protocol", "ssh"),
+        "is_hot": is_hot,
         "known_threat": otx_threat or abuse_threat,
         "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
         "is_returning": prev_count > 0,
@@ -154,6 +169,8 @@ def _enrich_opencanary(raw: dict) -> dict | None:
     logdata = raw.get("logdata") or {}
     username = logdata.get("USERNAME") or logdata.get("USER")
     password = logdata.get("PASSWORD")
+    path = logdata.get("PATH") if protocol == "http" else None
+    command = logdata.get("CMD") or logdata.get("COMMAND") if protocol == "redis" else None
 
     utc_time = raw.get("utc_time", "")
     try:
@@ -171,6 +188,7 @@ def _enrich_opencanary(raw: dict) -> dict | None:
 
     prev_count = _seen_ips.get(src_ip, 0)
     _seen_ips[src_ip] = prev_count + 1
+    is_hot = _check_velocity(src_ip)
 
     return {
         "timestamp": ts,
@@ -185,10 +203,12 @@ def _enrich_opencanary(raw: dict) -> dict | None:
         "event_type": event_type,
         "username": username,
         "password": password,
-        "command": None,
+        "command": command,
+        "path": path,
         "duration": None,
         "honeypot": raw.get("honeypot_host"),
         "protocol": protocol,
+        "is_hot": is_hot,
         "known_threat": otx_threat or abuse_threat,
         "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
         "is_returning": prev_count > 0,

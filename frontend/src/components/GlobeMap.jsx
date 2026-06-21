@@ -15,6 +15,7 @@ const ARC_COLORS = {
   'opencanary.mysql.login':    ['rgba(74,222,128,0.8)',  'rgba(74,222,128,0)'],
   'opencanary.ssh.login':      ['rgba(239,68,68,0.9)',   'rgba(239,68,68,0)'],
   'opencanary.telnet.login':   ['rgba(196,181,253,0.7)', 'rgba(196,181,253,0)'],
+  'opencanary.redis.command':  ['rgba(251,146,60,0.9)',  'rgba(251,146,60,0)'],
 }
 const DEFAULT_ARC = ['rgba(251,191,36,0.8)', 'rgba(251,191,36,0)']
 
@@ -29,6 +30,7 @@ const POINT_COLORS = {
   'opencanary.mysql.login':    'rgba(74,222,128,0.8)',
   'opencanary.ssh.login':      'rgba(239,68,68,0.9)',
   'opencanary.telnet.login':   'rgba(196,181,253,0.7)',
+  'opencanary.redis.command':  'rgba(251,146,60,0.9)',
 }
 const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 

@@ -335,7 +335,7 @@ OpenCanary runs alongside Cowrie on `honeypot-eu-01` and fakes a NAS login page 
 
 ### Open ports in OCI Security List
 
-Add ingress rules for TCP 80, 21, 3306 (source `0.0.0.0/0`).
+Add ingress rules for TCP 80, 21, 3306, 6379 (source `0.0.0.0/0`).
 
 ### iptables
 
@@ -343,6 +343,7 @@ Add ingress rules for TCP 80, 21, 3306 (source `0.0.0.0/0`).
 sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
 sudo iptables -I INPUT -p tcp --dport 21 -j ACCEPT
 sudo iptables -I INPUT -p tcp --dport 3306 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 6379 -j ACCEPT
 sudo netfilter-persistent save
 ```
 
@@ -376,7 +377,9 @@ sudo tee /etc/opencanaryd/opencanary.conf > /dev/null << 'EOF'
     "http.skin": "nasLogin",
     "mysql.enabled": true,
     "mysql.port": 3306,
-    "mysql.banner": "5.5.43-0ubuntu0.14.04.1"
+    "mysql.banner": "5.5.43-0ubuntu0.14.04.1",
+    "redis.enabled": true,
+    "redis.port": 6379
 }
 EOF
 ```
@@ -457,6 +460,7 @@ All steps above apply identically to both VMs. The only differences:
 | `2223` | TCP | Cowrie SSH listener (internal) |
 | `2323` | TCP | Cowrie Telnet listener (internal) |
 | `3306` | TCP | OpenCanary MySQL |
+| `6379` | TCP | OpenCanary Redis |
 | `51820` | UDP | WireGuard client (outbound to homelab) |
 
 ---

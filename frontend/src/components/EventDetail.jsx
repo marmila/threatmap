@@ -15,6 +15,7 @@ const EVENT_LABELS = {
   'opencanary.mysql.login':    'MYSQL LOGIN',
   'opencanary.ssh.login':      'SSH LOGIN',
   'opencanary.telnet.login':   'TELNET LOGIN',
+  'opencanary.redis.command':  'REDIS COMMAND',
 }
 
 const EVENT_BADGE = {
@@ -31,6 +32,7 @@ const EVENT_BADGE = {
   'opencanary.mysql.login':    { bg: '#052e16', color: '#4ade80' },
   'opencanary.ssh.login':      { bg: '#450a0a', color: '#ef4444' },
   'opencanary.telnet.login':   { bg: '#2e1065', color: '#c4b5fd' },
+  'opencanary.redis.command':  { bg: '#431407', color: '#fb923c' },
 }
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
@@ -152,7 +154,7 @@ export default function EventDetail({ event, onClose }) {
   const badge = EVENT_BADGE[event.event_type] || DEFAULT_BADGE
   const label = EVENT_LABELS[event.event_type] || event.event_type
 
-  const hasAttackDetail = event.username || event.password || event.command
+  const hasAttackDetail = event.username || event.password || event.command || event.path
   const hasAbuseData = event.abuse_score > 0
 
   return (
@@ -191,7 +193,7 @@ export default function EventDetail({ event, onClose }) {
             <Row
               label="PROTOCOL"
               value={event.protocol.toUpperCase()}
-              valueStyle={{ color: { ssh: '#60a5fa', telnet: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', http: '#c084fc' }[event.protocol] || '#60a5fa' }}
+              valueStyle={{ color: { ssh: '#60a5fa', telnet: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', http: '#c084fc', redis: '#fb923c' }[event.protocol] || '#60a5fa' }}
             />
           )}
         </div>
@@ -228,6 +230,9 @@ export default function EventDetail({ event, onClose }) {
             <div style={s.sectionLabel}>ATTACK</div>
             {event.command && (
               <Row label="COMMAND" value={event.command} valueStyle={s.command} />
+            )}
+            {event.path && (
+              <Row label="PATH" value={event.path} valueStyle={{ color: '#a78bfa', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' }} />
             )}
             {event.username && (
               <Row label="USERNAME" value={event.username} />
