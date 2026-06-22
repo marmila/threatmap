@@ -46,14 +46,17 @@ def _check_velocity(ip: str) -> bool:
     return len(ts) > 10
 
 _SKIP_EVENT_TYPES = {
+    "cowrie.session.connect",
     "cowrie.session.params",
     "cowrie.session.closed",
+    "cowrie.client.kex",
     "cowrie.client.lex",
     "cowrie.client.size",
     "cowrie.client.var",
     "cowrie.client.fingerprint",
     "cowrie.client.version",
     "cowrie.log.closed",
+    "cowrie.direct-tcpip.request",
 }
 
 

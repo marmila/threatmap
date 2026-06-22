@@ -96,8 +96,14 @@ async def stats():
         {"$sort": {"count": -1}},
         {"$project": {"honeypot": "$_id", "count": 1, "_id": 0}},
     ]
+    _noise = [
+        "cowrie.session.connect", "cowrie.session.closed", "cowrie.session.params",
+        "cowrie.client.kex", "cowrie.client.version", "cowrie.client.lex",
+        "cowrie.client.size", "cowrie.client.var", "cowrie.client.fingerprint",
+        "cowrie.log.closed", "cowrie.direct-tcpip.request",
+    ]
     event_type_pipeline = [
-        {"$match": {"event_type": {"$nin": [None, ""]}}},
+        {"$match": {"event_type": {"$nin": [None, ""] + _noise}}},
         {"$group": {"_id": "$event_type", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
         {"$limit": 10},
