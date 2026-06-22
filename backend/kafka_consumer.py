@@ -32,7 +32,7 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     4002: ("opencanary.ssh.login", "ssh"),
     6001: ("opencanary.telnet.login", "telnet"),
     8001: ("opencanary.mysql.login", "mysql"),
-    9001: ("opencanary.redis.command", "redis"),
+    17001: ("opencanary.redis.command", "redis"),
 }
 
 
