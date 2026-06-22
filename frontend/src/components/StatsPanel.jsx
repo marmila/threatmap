@@ -157,6 +157,7 @@ export default function StatsPanel({
   hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] },
   commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
   httpPathsData = [],
+  redisCommandsData = [],
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
@@ -364,6 +365,17 @@ export default function StatsPanel({
                   ))}
                 </div>
               )}
+              {redisCommandsData.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP REDIS COMMANDS</div>
+                  {redisCommandsData.slice(0, 6).map((c, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                      <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -536,6 +548,17 @@ export default function StatsPanel({
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ color: '#a78bfa', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
                     <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{p.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {redisCommandsData.length > 0 && (
+              <div style={s.section}>
+                <div style={s.label}>TOP REDIS COMMANDS</div>
+                {redisCommandsData.slice(0, 8).map((c, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
                   </div>
                 ))}
               </div>

@@ -54,6 +54,7 @@ export default function App() {
   const [honeypotBreakdown, setHoneypotBreakdown] = useState([])
   const [eventTypeBreakdown, setEventTypeBreakdown] = useState([])
   const [httpPathsData, setHttpPathsData] = useState([])
+  const [redisCommandsData, setRedisCommandsData] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -90,13 +91,14 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [evRes, stRes, hrRes, credRes, cmdRes, pathsRes] = await Promise.all([
+        const [evRes, stRes, hrRes, credRes, cmdRes, pathsRes, redisRes] = await Promise.all([
           fetch('/api/events/recent?limit=200'),
           fetch('/api/stats'),
           fetch('/api/stats/hourly'),
           fetch('/api/stats/credentials'),
           fetch('/api/stats/commands'),
           fetch('/api/stats/http-paths'),
+          fetch('/api/stats/redis-commands'),
         ])
         const events = await evRes.json()
         const stats = await stRes.json()
@@ -104,6 +106,7 @@ export default function App() {
         const creds = await credRes.json()
         const cmds = await cmdRes.json()
         const paths = await pathsRes.json()
+        const redisCmds = await redisRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
         setTopIps(stats.top_ips || [])
@@ -111,6 +114,7 @@ export default function App() {
         setHoneypotBreakdown(stats.honeypot_breakdown || [])
         setEventTypeBreakdown(stats.event_type_breakdown || [])
         setHttpPathsData(paths || [])
+        setRedisCommandsData(redisCmds || [])
         setHourlyData(hourly || [])
         setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
         setCommandsData(cmds || [])
@@ -149,6 +153,7 @@ export default function App() {
         honeypotBreakdown={honeypotBreakdown}
         eventTypeBreakdown={eventTypeBreakdown}
         httpPathsData={httpPathsData}
+        redisCommandsData={redisCommandsData}
       />
     </>
   )

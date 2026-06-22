@@ -183,6 +183,20 @@ async def commands_stats():
     return results
 
 
+@app.get("/api/stats/redis-commands")
+async def redis_commands_stats():
+    db = get_db()
+    pipeline = [
+        {"$match": {"event_type": "opencanary.redis.command", "command": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$command", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 15},
+        {"$project": {"command": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(15)
+    return results
+
+
 @app.get("/api/stats/http-paths")
 async def http_paths_stats():
     db = get_db()
