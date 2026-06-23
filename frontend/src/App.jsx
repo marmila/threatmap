@@ -55,6 +55,7 @@ export default function App() {
   const [eventTypeBreakdown, setEventTypeBreakdown] = useState([])
   const [httpPathsData, setHttpPathsData] = useState([])
   const [redisCommandsData, setRedisCommandsData] = useState([])
+  const [uniqueIps, setUniqueIps] = useState(0)
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -113,6 +114,7 @@ export default function App() {
         setProtocolBreakdown(stats.protocol_breakdown || [])
         setHoneypotBreakdown(stats.honeypot_breakdown || [])
         setEventTypeBreakdown(stats.event_type_breakdown || [])
+        setUniqueIps(stats.unique_ips || 0)
         setHttpPathsData(paths || [])
         setRedisCommandsData(redisCmds || [])
         setHourlyData(hourly || [])
@@ -154,6 +156,7 @@ export default function App() {
         eventTypeBreakdown={eventTypeBreakdown}
         httpPathsData={httpPathsData}
         redisCommandsData={redisCommandsData}
+        uniqueIps={uniqueIps}
       />
     </>
   )

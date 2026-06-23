@@ -1,16 +1,22 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import EventDetail from './EventDetail.jsx'
 
 const eventColor = (t) => {
   if (!t) return '#fbbf24'
   if (t.includes('login.success')) return '#ef4444'
   if (t.includes('command.input')) return '#f97316'
+  if (t.includes('file_download')) return '#f97316'
   if (t.includes('session.connect') || t.includes('session.closed')) return '#64748b'
   if (t.includes('http')) return '#a78bfa'
   if (t.includes('ftp')) return '#22d3ee'
   if (t.includes('mysql')) return '#4ade80'
   if (t.includes('redis')) return '#fb923c'
   return '#fbbf24'
+}
+
+const TYPE_LABEL = (t) => {
+  const m = { 'cowrie.session.file_download': 'file.download' }
+  return m[t] || (t || '').replace(/^(cowrie|opencanary)\./, '')
 }
 
 const s = {
@@ -110,6 +116,7 @@ function HourlyChart({ data }) {
   const tipX = hovered !== null ? Math.min(hovered * barW, W - 72) : 0
   const tipBarH = tip ? Math.max(2, (tip.count / max) * (H - 4)) : 0
   const tipY = tip ? Math.max(0, H - tipBarH - 20) : 0
+  const peakIdx = hours.reduce((pi, h, i) => h.count > hours[pi].count ? i : pi, 0)
   return (
     <div>
       <div style={s.label}>ATTACKS / HOUR (24H)</div>
@@ -121,10 +128,11 @@ function HourlyChart({ data }) {
         onMouseLeave={() => setHovered(null)}>
         {hours.map(({ count }, i) => {
           const barH = Math.max(2, (count / max) * (H - 4))
+          const isPeak = i === peakIdx && count > 0
           return (
             <rect key={i} x={i * barW + 1} y={H - barH}
               width={Math.max(1, barW - 2)} height={barH}
-              fill={`rgba(251,191,36,${hovered === i ? 1 : 0.25 + 0.75 * (count / max)})`} rx={1} />
+              fill={isPeak ? '#ffffff' : `rgba(251,191,36,${hovered === i ? 1 : 0.25 + 0.75 * (count / max)})`} rx={1} />
           )
         })}
         {tip && (
@@ -149,7 +157,17 @@ const TYPE_COLOR = (t) => {
   if (t.includes('ftp')) return '#22d3ee'
   if (t.includes('mysql')) return '#4ade80'
   if (t.includes('redis')) return '#fb923c'
+  if (t.includes('file_download')) return '#f97316'
   return '#fbbf24'
+}
+
+const PROTOCOL_COLORS = {
+  ssh:    { bg: '#1e3a5f', color: '#60a5fa', border: '#1e3a5f' },
+  telnet: { bg: '#2e1065', color: '#a78bfa', border: '#4c1d95' },
+  http:   { bg: '#2e1065', color: '#a78bfa', border: '#4c1d95' },
+  ftp:    { bg: '#083344', color: '#22d3ee', border: '#164e63' },
+  mysql:  { bg: '#052e16', color: '#4ade80', border: '#14532d' },
+  redis:  { bg: '#431407', color: '#fb923c', border: '#7c2d12' },
 }
 
 export default function StatsPanel({
@@ -158,12 +176,27 @@ export default function StatsPanel({
   commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
   httpPathsData = [],
   redisCommandsData = [],
+  uniqueIps = 0,
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
   const [countryFilter, setCountryFilter] = useState(null)
+  const [nowTs, setNowTs] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const lastAgo = useMemo(() => {
+    const ts = events[0]?.timestamp
+    if (!ts) return null
+    const diff = Math.floor((nowTs - new Date(ts).getTime()) / 1000)
+    if (diff < 60) return `${diff}s ago`
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    return `${Math.floor(diff / 3600)}h ago`
+  }, [events, nowTs])
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
+  const maxTypeCount = eventTypeBreakdown[0]?.count || 1
 
   const dedupedFeed = useMemo(() => {
     const source = countryFilter ? events.filter(e => e.src_country === countryFilter) : events
@@ -231,7 +264,10 @@ export default function StatsPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={s.title}>THREATMAP</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <span style={s.bigNumMobile}>{total.toLocaleString()}</span>
+              <div style={{ textAlign: 'right' }}>
+                <span style={s.bigNumMobile}>{total.toLocaleString()}</span>
+                {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px' }}>{uniqueIps.toLocaleString()} IPs{lastAgo ? ` · ${lastAgo}` : ''}</div>}
+              </div>
               {liveBadge}
             </div>
           </div>
@@ -240,9 +276,9 @@ export default function StatsPanel({
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16', redis: '#431407' }[p.protocol] || '#0f172a',
-                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', redis: '#fb923c' }[p.protocol] || '#60a5fa',
-                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d', redis: '#7c2d12' }[p.protocol] || '#1e3a5f'}`,
+                  background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                  color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                  border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
@@ -279,7 +315,7 @@ export default function StatsPanel({
                   {topIps.slice(0, 5).map((entry) => (
                     <div key={entry.ip}>
                       <div style={s.row}>
-                        <span style={s.ipAddr}>{entry.ip}{entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}</span>
+                        <span style={s.ipAddr}>{entry.ip}{entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}{entry.country_code && <span style={{ color: '#475569', fontSize: '8px', marginLeft: '5px' }}>({entry.country_code})</span>}</span>
                         <span style={s.count}>{entry.count.toLocaleString()}</span>
                       </div>
                       <div style={s.bar}><div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} /></div>
@@ -292,9 +328,25 @@ export default function StatsPanel({
                 <div style={s.section}>
                   <div style={s.label}>SENSORS</div>
                   {honeypotBreakdown.map(h => (
-                    <div key={h.honeypot} style={s.row}>
-                      <span style={s.country}>{h.honeypot || 'unknown'}</span>
-                      <span style={s.count}>{h.count.toLocaleString()}</span>
+                    <div key={h.honeypot} style={{ marginBottom: '6px' }}>
+                      <div style={s.row}>
+                        <span style={s.country}>{h.honeypot || 'unknown'}</span>
+                        <span style={s.count}>{h.count.toLocaleString()}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '3px', paddingLeft: '4px' }}>
+                        {(h.protocols || [])
+                          .filter(p => p.protocol && p.protocol !== 'unknown')
+                          .sort((a, b) => b.count - a.count)
+                          .map(p => (
+                            <span key={p.protocol} style={{
+                              fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+                              background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                              color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                            }}>
+                              {p.protocol.toUpperCase()} {p.count.toLocaleString()}
+                            </span>
+                          ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -303,12 +355,15 @@ export default function StatsPanel({
                 <div style={s.section}>
                   <div style={s.label}>ATTACK TYPES</div>
                   {eventTypeBreakdown.map(e => (
-                    <div key={e.event_type} style={s.row}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
-                        <span style={{ color: '#94a3b8', fontSize: '9px' }}>{e.event_type.replace(/^(cowrie|opencanary)\./, '')}</span>
-                      </span>
-                      <span style={s.count}>{e.count.toLocaleString()}</span>
+                    <div key={e.event_type}>
+                      <div style={s.row}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
+                          <span style={{ color: '#94a3b8', fontSize: '9px' }}>{TYPE_LABEL(e.event_type)}</span>
+                        </span>
+                        <span style={s.count}>{e.count.toLocaleString()}</span>
+                      </div>
+                      <div style={s.bar}><div style={{ ...s.barFill, width: `${(e.count / maxTypeCount) * 100}%`, background: TYPE_COLOR(e.event_type) }} /></div>
                     </div>
                   ))}
                 </div>
@@ -395,18 +450,24 @@ export default function StatsPanel({
               {import.meta.env.VITE_APP_VERSION || 'dev'}
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-            {liveBadge}
-            <div style={s.bigNum}>{total.toLocaleString()}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '8px' }}>
+            <div>
+              {liveBadge}
+              {lastAgo && <div style={{ color: '#475569', fontSize: '8px', marginTop: '3px', letterSpacing: '1px' }}>{lastAgo}</div>}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={s.bigNum}>{total.toLocaleString()}</div>
+              {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px', marginTop: '2px' }}>{uniqueIps.toLocaleString()} IPs</div>}
+            </div>
           </div>
           {filteredProtocol.length > 0 && (
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
               {filteredProtocol.map(p => (
                 <span key={p.protocol} style={{
                   fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: { telnet: '#2e1065', http: '#2e1065', ftp: '#083344', mysql: '#052e16', redis: '#431407' }[p.protocol] || '#0f172a',
-                  color: { telnet: '#a78bfa', http: '#a78bfa', ftp: '#22d3ee', mysql: '#4ade80', redis: '#fb923c' }[p.protocol] || '#60a5fa',
-                  border: `1px solid ${{ telnet: '#4c1d95', http: '#4c1d95', ftp: '#164e63', mysql: '#14532d', redis: '#7c2d12' }[p.protocol] || '#1e3a5f'}`,
+                  background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                  color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                  border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
                 }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
@@ -460,6 +521,7 @@ export default function StatsPanel({
                          style={{ ...s.ipAddr, textDecoration: 'none' }}>
                         {entry.ip}
                         {entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}
+                        {entry.country_code && <span style={{ color: '#475569', fontSize: '8px', marginLeft: '5px' }}>({entry.country_code})</span>}
                       </a>
                       <span style={s.count}>{entry.count.toLocaleString()}</span>
                     </div>

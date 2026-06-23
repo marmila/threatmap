@@ -24,7 +24,7 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 - Returning attackers flagged with RPT badge; IPs hitting >10 times/min flagged with HOT badge in the live feed
 - Country drilldown: click any country in TOP SOURCES to filter the live feed to that country only
 - INTEL tab: credentials leaderboard, top shell commands (Cowrie), top HTTP paths probed, top Redis commands issued by attackers
-- STATS tab: attack type breakdown, sensor breakdown, protocol split
+- STATS tab: attack type breakdown (with progress bars), sensor breakdown (with per-protocol split per honeypot), protocol split, unique attacker IP count, last attack timestamp, peak hour highlighted in hourly chart
 - Click any event in the live feed for full attack detail (credentials, path or Redis command, AbuseIPDB score, Shodan data, geo coords)
 
 ---
@@ -151,7 +151,7 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 | Endpoint | Description |
 |---|---|
 | `GET /api/events/recent?limit=200` | Last N enriched attack events from MongoDB |
-| `GET /api/stats` | Total count + top 10 countries/IPs + protocol breakdown + honeypot breakdown |
+| `GET /api/stats` | Total count + unique IP count + top 10 countries/IPs (with country code) + protocol breakdown + honeypot breakdown (with per-protocol split) + attack type breakdown |
 | `GET /api/stats/hourly` | Attack count per hour for the last 24 hours (used by bar chart) |
 | `GET /api/stats/credentials` | Top 10 usernames and top 10 passwords tried across all attacks |
 | `GET /api/stats/commands` | Top 10 shell commands executed in `cowrie.command.input` events |

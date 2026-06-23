@@ -80,11 +80,12 @@ async def stats():
             "_id": "$src_ip",
             "count": {"$sum": 1},
             "country": {"$first": "$src_country"},
+            "country_code": {"$first": "$src_country_code"},
             "known_threat": {"$max": "$known_threat"},
         }},
         {"$sort": {"count": -1}},
         {"$limit": 10},
-        {"$project": {"ip": "$_id", "count": 1, "country": 1, "known_threat": 1, "_id": 0}},
+        {"$project": {"ip": "$_id", "count": 1, "country": 1, "country_code": 1, "known_threat": 1, "_id": 0}},
     ]
     protocol_pipeline = [
         {"$group": {"_id": "$protocol", "count": {"$sum": 1}}},
@@ -92,15 +93,28 @@ async def stats():
         {"$project": {"protocol": "$_id", "count": 1, "_id": 0}},
     ]
     honeypot_pipeline = [
-        {"$group": {"_id": "$honeypot", "count": {"$sum": 1}}},
+        {"$group": {
+            "_id": {"honeypot": "$honeypot", "protocol": "$protocol"},
+            "count": {"$sum": 1},
+        }},
+        {"$group": {
+            "_id": "$_id.honeypot",
+            "count": {"$sum": "$count"},
+            "protocols": {"$push": {"protocol": "$_id.protocol", "count": "$count"}},
+        }},
         {"$sort": {"count": -1}},
-        {"$project": {"honeypot": "$_id", "count": 1, "_id": 0}},
+        {"$project": {"honeypot": "$_id", "count": 1, "protocols": 1, "_id": 0}},
+    ]
+    unique_ip_pipeline = [
+        {"$group": {"_id": "$src_ip"}},
+        {"$count": "count"},
     ]
     _noise = [
         "cowrie.session.connect", "cowrie.session.closed", "cowrie.session.params",
         "cowrie.client.kex", "cowrie.client.version", "cowrie.client.lex",
         "cowrie.client.size", "cowrie.client.var", "cowrie.client.fingerprint",
         "cowrie.log.closed", "cowrie.direct-tcpip.request",
+        "cowrie.direct-tcpip.data", "cowrie.direct-tcpip.ja4h",
     ]
     event_type_pipeline = [
         {"$match": {"event_type": {"$nin": [None, ""] + _noise}}},
@@ -110,15 +124,18 @@ async def stats():
         {"$project": {"event_type": "$_id", "count": 1, "_id": 0}},
     ]
 
-    top_countries, top_ips, protocol_breakdown, honeypot_breakdown, event_type_breakdown = await asyncio.gather(
+    top_countries, top_ips, protocol_breakdown, honeypot_breakdown, event_type_breakdown, unique_ip_result = await asyncio.gather(
         db.events.aggregate(country_pipeline).to_list(10),
         db.events.aggregate(ip_pipeline).to_list(10),
         db.events.aggregate(protocol_pipeline).to_list(10),
-        db.events.aggregate(honeypot_pipeline).to_list(10),
+        db.events.aggregate(honeypot_pipeline).to_list(20),
         db.events.aggregate(event_type_pipeline).to_list(10),
+        db.events.aggregate(unique_ip_pipeline).to_list(1),
     )
+    unique_ips = unique_ip_result[0]["count"] if unique_ip_result else 0
     return {
         "total": total,
+        "unique_ips": unique_ips,
         "top_countries": top_countries,
         "top_ips": top_ips,
         "protocol_breakdown": protocol_breakdown,

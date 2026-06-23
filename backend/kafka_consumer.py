@@ -57,6 +57,8 @@ _SKIP_EVENT_TYPES = {
     "cowrie.client.version",
     "cowrie.log.closed",
     "cowrie.direct-tcpip.request",
+    "cowrie.direct-tcpip.data",
+    "cowrie.direct-tcpip.ja4h",
 }
 
 
