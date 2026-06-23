@@ -2,7 +2,7 @@
 
 Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypots on Oracle Cloud feed live attack events, enriched with geolocation and threat intelligence, and rendered as animated arcs on a 3D globe.
 
-![Architecture](docs/threatmap-architecture.png)
+![Architecture](docs/threatmap-schema-new.png)
 
 ## Screenshots
 
@@ -14,7 +14,7 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 
 ## What it does
 
-- Cowrie SSH+Telnet honeypots and OpenCanary (HTTP/FTP/MySQL/Redis) on two Oracle Cloud VMs (eu-milan-1) capture real attacks from the internet
+- [Cowrie](https://github.com/cowrie/cowrie) SSH+Telnet honeypots and [OpenCanary](https://github.com/thinkst/opencanary) (HTTP/FTP/MySQL/Redis) on two Oracle Cloud VMs (eu-milan-1) capture real attacks from the internet
 - Events stream over WireGuard VPN → Fluentd → Kafka
 - Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
 - React frontend renders animated attack arcs on a 3D globe in real time via WebSocket, with floating country/city labels at attack origins
@@ -33,7 +33,7 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 
 | Layer | Technology |
 |---|---|
-| Honeypots | Cowrie SSH+Telnet + OpenCanary HTTP/FTP/MySQL/Redis (Docker, `--network host`) on two Oracle Cloud E2.1.Micro VMs |
+| Honeypots | [Cowrie](https://github.com/cowrie/cowrie) SSH+Telnet + [OpenCanary](https://github.com/thinkst/opencanary) HTTP/FTP/MySQL/Redis (Docker, `--network host`) on two Oracle Cloud E2.1.Micro VMs |
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
@@ -223,7 +223,7 @@ Each event (WebSocket or REST) contains:
 
 ## Honeypot setup
 
-See [docs/honeypot-setup.md](docs/honeypot-setup.md) for the full guide covering:
+See [docs/honeypot-setup.md](docs/honeypot-setup.md) for the full guide covering ([Cowrie](https://github.com/cowrie/cowrie) + [OpenCanary](https://github.com/thinkst/opencanary)):
 - Oracle Cloud VM provisioning
 - WireGuard VPN tunnel setup
 - SSH port migration (real SSH → 2222, Cowrie → 2223 via iptables redirect)
