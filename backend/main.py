@@ -70,10 +70,10 @@ async def stats():
     total = await db.events.count_documents({})
 
     country_pipeline = [
-        {"$group": {"_id": "$src_country", "count": {"$sum": 1}}},
+        {"$group": {"_id": "$src_country", "count": {"$sum": 1}, "country_code": {"$first": "$src_country_code"}}},
         {"$sort": {"count": -1}},
         {"$limit": 10},
-        {"$project": {"country": "$_id", "count": 1, "_id": 0}},
+        {"$project": {"country": "$_id", "count": 1, "country_code": 1, "_id": 0}},
     ]
     ip_pipeline = [
         {"$group": {

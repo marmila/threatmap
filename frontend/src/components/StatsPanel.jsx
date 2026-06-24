@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import EventDetail from './EventDetail.jsx'
 
 const eventColor = (t) => {
@@ -12,6 +12,11 @@ const eventColor = (t) => {
   if (t.includes('mysql')) return '#4ade80'
   if (t.includes('redis')) return '#fb923c'
   return '#fbbf24'
+}
+
+const flag = (code) => {
+  if (!code || code.length !== 2) return ''
+  return [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('')
 }
 
 const TYPE_LABEL = (t) => {
@@ -181,7 +186,12 @@ export default function StatsPanel({
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
   const [countryFilter, setCountryFilter] = useState(null)
+  const [protocolFilter, setProtocolFilter] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(true)
+  const [paused, setPaused] = useState(false)
+  const [frozenEvents, setFrozenEvents] = useState([])
+  const [newEventCount, setNewEventCount] = useState(0)
+  const pauseFirstTsRef = useRef(null)
   const [nowTs, setNowTs] = useState(Date.now())
   useEffect(() => {
     const t = setInterval(() => setNowTs(Date.now()), 1000)
@@ -195,12 +205,36 @@ export default function StatsPanel({
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
     return `${Math.floor(diff / 3600)}h ago`
   }, [events, nowTs])
+
+  const attacksPerMin = useMemo(() => {
+    const cutoff = nowTs - 60000
+    return events.filter(e => new Date(e.timestamp).getTime() > cutoff).length
+  }, [events, nowTs])
+
+  const togglePause = () => {
+    if (!paused) {
+      setFrozenEvents([...events])
+      pauseFirstTsRef.current = events[0]?.timestamp || null
+      setNewEventCount(0)
+    }
+    setPaused(p => !p)
+  }
+
+  useEffect(() => {
+    if (!paused || !pauseFirstTsRef.current) return
+    const pauseTs = new Date(pauseFirstTsRef.current).getTime()
+    setNewEventCount(events.filter(e => new Date(e.timestamp).getTime() > pauseTs).length)
+  }, [events, paused])
   const maxCountryCount = topCountries[0]?.count || 1
   const maxIpCount = topIps[0]?.count || 1
   const maxTypeCount = eventTypeBreakdown[0]?.count || 1
 
   const dedupedFeed = useMemo(() => {
-    const source = countryFilter ? events.filter(e => e.src_country === countryFilter) : events
+    const base = paused ? frozenEvents : events
+    const source = base.filter(e =>
+      (!countryFilter || e.src_country === countryFilter) &&
+      (!protocolFilter || e.protocol === protocolFilter)
+    )
     const seen = new Set()
     const result = []
     const ipCounts = {}
@@ -213,7 +247,7 @@ export default function StatsPanel({
       if (result.length >= (isMobile ? 15 : 25)) break
     }
     return result
-  }, [events, isMobile, countryFilter])
+  }, [events, isMobile, countryFilter, protocolFilter, paused, frozenEvents])
 
   const filteredProtocol = protocolBreakdown.filter(p => p.protocol && p.protocol !== 'unknown')
 
@@ -225,10 +259,28 @@ export default function StatsPanel({
 
   const feedItems = (
     <div style={s.feed}>
-      {countryFilter && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-          <span style={{ color: '#94a3b8', fontSize: '9px' }}>▶ {countryFilter}</span>
-          <button onClick={() => setCountryFilter(null)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', fontSize: '9px', letterSpacing: '1px' }}>✕ CLEAR</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexShrink: 0 }}>
+        <span style={{ color: paused ? '#fbbf24' : '#475569', fontSize: '9px', letterSpacing: '1px' }}>
+          {paused ? `⏸ PAUSED${newEventCount > 0 ? ` · +${newEventCount} new` : ''}` : `${attacksPerMin}/min`}
+        </span>
+        <button onClick={togglePause} style={{ background: 'none', border: '1px solid #1e2535', color: '#94a3b8', cursor: 'pointer', fontSize: '8px', padding: '2px 6px', borderRadius: '3px', letterSpacing: '1px', fontFamily: "'Courier New', monospace" }}>
+          {paused ? '▶ RESUME' : '⏸ PAUSE'}
+        </button>
+      </div>
+      {(countryFilter || protocolFilter) && (
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+          {countryFilter && (
+            <span style={{ color: '#94a3b8', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              ▶ {countryFilter}
+              <button onClick={() => setCountryFilter(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px', padding: 0, lineHeight: 1 }}>✕</button>
+            </span>
+          )}
+          {protocolFilter && (
+            <span style={{ color: '#94a3b8', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              ▶ {protocolFilter.toUpperCase()}
+              <button onClick={() => setProtocolFilter(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px', padding: 0, lineHeight: 1 }}>✕</button>
+            </span>
+          )}
         </div>
       )}
       {dedupedFeed.map((e, i) => (
@@ -249,7 +301,7 @@ export default function StatsPanel({
               {e.known_threat && <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>}
             </div>
           </div>
-          <div style={s.detail}>{e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}</div>
+          <div style={s.detail}>{flag(e.src_country_code)}{flag(e.src_country_code) ? ' ' : ''}{e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}</div>
           <div style={s.detail}>{e.event_type}{e.username ? ` · ${e.username}` : ''}</div>
         </div>
       ))}
@@ -267,7 +319,7 @@ export default function StatsPanel({
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={{ textAlign: 'right' }}>
                 <span style={s.bigNumMobile}>{total.toLocaleString()}</span>
-                {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px' }}>{uniqueIps.toLocaleString()} IPs{lastAgo ? ` · ${lastAgo}` : ''}</div>}
+                {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px' }}>{uniqueIps.toLocaleString()} IPs{lastAgo ? ` · ${lastAgo}` : ''}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
               </div>
               {liveBadge}
             </div>
@@ -275,12 +327,17 @@ export default function StatsPanel({
           {filteredProtocol.length > 0 && (
             <div style={{ display: 'flex', gap: '6px' }}>
               {filteredProtocol.map(p => (
-                <span key={p.protocol} style={{
-                  fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
-                  color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
-                  border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
-                }}>
+                <span key={p.protocol}
+                  onClick={() => { setProtocolFilter(f => f === p.protocol ? null : p.protocol); setActiveTab('feed') }}
+                  style={{
+                    fontSize: '9px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
+                    background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                    color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                    border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
+                    opacity: protocolFilter && protocolFilter !== p.protocol ? 0.35 : 1,
+                    outline: protocolFilter === p.protocol ? `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color}` : 'none',
+                    outlineOffset: '1px',
+                  }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
               ))}
@@ -302,7 +359,7 @@ export default function StatsPanel({
                   {topCountries.slice(0, 5).map((c) => (
                     <div key={c.country} style={{ cursor: 'pointer' }} onClick={() => { setCountryFilter(c.country); setActiveTab('feed') }}>
                       <div style={s.row}>
-                        <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{c.country || 'Unknown'}</span>
+                        <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{flag(c.country_code)}{flag(c.country_code) ? ' ' : ''}{c.country || 'Unknown'}</span>
                         <span style={s.count}>{c.count.toLocaleString()}</span>
                       </div>
                       <div style={s.bar}><div style={{ ...s.barFill, width: `${(c.count / maxCountryCount) * 100}%` }} /></div>
@@ -454,7 +511,7 @@ export default function StatsPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '8px' }}>
             <div>
               {liveBadge}
-              {lastAgo && <div style={{ color: '#475569', fontSize: '8px', marginTop: '3px', letterSpacing: '1px' }}>{lastAgo}</div>}
+              {lastAgo && <div style={{ color: '#475569', fontSize: '8px', marginTop: '3px', letterSpacing: '1px' }}>{lastAgo}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={s.bigNum}>{total.toLocaleString()}</div>
@@ -464,12 +521,17 @@ export default function StatsPanel({
           {filteredProtocol.length > 0 && (
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
               {filteredProtocol.map(p => (
-                <span key={p.protocol} style={{
-                  fontSize: '9px', padding: '2px 7px', borderRadius: '3px',
-                  background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
-                  color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
-                  border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
-                }}>
+                <span key={p.protocol}
+                  onClick={() => { setProtocolFilter(f => f === p.protocol ? null : p.protocol); setActiveTab('feed') }}
+                  style={{
+                    fontSize: '9px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
+                    background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                    color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                    border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
+                    opacity: protocolFilter && protocolFilter !== p.protocol ? 0.35 : 1,
+                    outline: protocolFilter === p.protocol ? `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color}` : 'none',
+                    outlineOffset: '1px',
+                  }}>
                   {p.protocol.toUpperCase()} {p.count.toLocaleString()}
                 </span>
               ))}
@@ -500,7 +562,7 @@ export default function StatsPanel({
                 {topCountries.slice(0, 5).map((c) => (
                   <div key={c.country} style={{ cursor: 'pointer' }} onClick={() => { setCountryFilter(c.country); setActiveTab('feed') }}>
                     <div style={s.row}>
-                      <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{c.country || 'Unknown'}</span>
+                      <span style={{ ...s.country, color: countryFilter === c.country ? '#4ade80' : undefined }}>{flag(c.country_code)}{flag(c.country_code) ? ' ' : ''}{c.country || 'Unknown'}</span>
                       <span style={s.count}>{c.count.toLocaleString()}</span>
                     </div>
                     <div style={s.bar}>
@@ -540,9 +602,25 @@ export default function StatsPanel({
               <div style={s.section}>
                 <div style={s.label}>SENSORS</div>
                 {honeypotBreakdown.map(h => (
-                  <div key={h.honeypot} style={s.row}>
-                    <span style={s.country}>{h.honeypot || 'unknown'}</span>
-                    <span style={s.count}>{h.count.toLocaleString()}</span>
+                  <div key={h.honeypot} style={{ marginBottom: '6px' }}>
+                    <div style={s.row}>
+                      <span style={s.country}>{h.honeypot || 'unknown'}</span>
+                      <span style={s.count}>{h.count.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '3px', paddingLeft: '4px' }}>
+                      {(h.protocols || [])
+                        .filter(p => p.protocol && p.protocol !== 'unknown')
+                        .sort((a, b) => b.count - a.count)
+                        .map(p => (
+                          <span key={p.protocol} style={{
+                            fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+                            background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
+                            color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
+                          }}>
+                            {p.protocol.toUpperCase()} {p.count.toLocaleString()}
+                          </span>
+                        ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -551,12 +629,15 @@ export default function StatsPanel({
               <div style={s.section}>
                 <div style={s.label}>ATTACK TYPES</div>
                 {eventTypeBreakdown.map(e => (
-                  <div key={e.event_type} style={s.row}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
-                      <span style={{ color: '#94a3b8', fontSize: '9px' }}>{e.event_type.replace(/^(cowrie|opencanary)\./, '')}</span>
-                    </span>
-                    <span style={s.count}>{e.count.toLocaleString()}</span>
+                  <div key={e.event_type}>
+                    <div style={s.row}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
+                        <span style={{ color: '#94a3b8', fontSize: '9px' }}>{TYPE_LABEL(e.event_type)}</span>
+                      </span>
+                      <span style={s.count}>{e.count.toLocaleString()}</span>
+                    </div>
+                    <div style={s.bar}><div style={{ ...s.barFill, width: `${(e.count / maxTypeCount) * 100}%`, background: TYPE_COLOR(e.event_type) }} /></div>
                   </div>
                 ))}
               </div>

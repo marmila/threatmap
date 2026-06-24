@@ -22,6 +22,8 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 - Hourly bar chart in the stats panel shows attack volume over the last 24 hours
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner + intel source name in detail modal
 - Returning attackers flagged with RPT badge; IPs hitting >10 times/min flagged with HOT badge in the live feed
+- Live feed: country flag emojis next to country names; attacks/min gauge; pause/resume to freeze the feed while reading an event
+- Protocol filter pills (SSH / HTTP / FTP / etc.) in the header — click to filter the feed to a single protocol, click again to clear
 - Country drilldown: click any country in TOP SOURCES to filter the live feed to that country only
 - INTEL tab: credentials leaderboard, top shell commands (Cowrie), top HTTP paths probed, top Redis commands issued by attackers
 - STATS tab: attack type breakdown (with progress bars), sensor breakdown (with per-protocol split per honeypot), protocol split, unique attacker IP count, last attack timestamp, peak hour highlighted in hourly chart

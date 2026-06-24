@@ -36,6 +36,11 @@ const EVENT_BADGE = {
 }
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
+const flag = (code) => {
+  if (!code || code.length !== 2) return ''
+  return [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('')
+}
+
 const abuseColor = (score) => {
   if (score >= 75) return '#ef4444'
   if (score >= 50) return '#f97316'
@@ -180,7 +185,7 @@ export default function EventDetail({ event, onClose }) {
             valueStyle={s.ip}
           />
           <Row label="COUNTRY" value={event.src_country_code
-            ? `${event.src_country} (${event.src_country_code})`
+            ? `${flag(event.src_country_code)} ${event.src_country} (${event.src_country_code})`
             : event.src_country}
           />
           <Row label="CITY" value={event.src_city} />
