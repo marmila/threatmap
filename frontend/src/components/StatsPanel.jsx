@@ -181,6 +181,7 @@ export default function StatsPanel({
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
   const [countryFilter, setCountryFilter] = useState(null)
+  const [mobileOpen, setMobileOpen] = useState(true)
   const [nowTs, setNowTs] = useState(Date.now())
   useEffect(() => {
     const t = setInterval(() => setNowTs(Date.now()), 1000)
@@ -256,11 +257,11 @@ export default function StatsPanel({
   )
 
   if (isMobile) {
-    const sheetHeight = activeTab === 'feed' ? '50vh' : '85vh'
+    const sheetHeight = !mobileOpen ? '28px' : activeTab === 'feed' ? '50vh' : '85vh'
     return (
       <>
-        <div style={{ ...s.sheet, maxHeight: sheetHeight }}>
-          <div style={s.handle} />
+        <div style={{ ...s.sheet, maxHeight: sheetHeight, overflow: mobileOpen ? undefined : 'hidden' }}>
+          <div style={{ ...s.handle, cursor: 'pointer' }} onClick={() => setMobileOpen(o => !o)} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={s.title}>THREATMAP</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
