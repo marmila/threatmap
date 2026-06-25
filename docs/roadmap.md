@@ -4,15 +4,6 @@ Backlog of planned improvements, grouped by area. No priority order within secti
 
 ---
 
-## Stats & Feed
-
-- **7-day chart** — toggle on the hourly chart between 24h and 7d view
-- **Cross-protocol MULTI badge** — flag IPs that hit more than one protocol (e.g. SSH + Redis) with a `MULTI` badge in the live feed
-- **ASN/org leaderboard** — new section in the INTEL tab: which hosting providers (DigitalOcean, OVH, Linode, …) send the most attacks, derived from `shodan_org` or AbuseIPDB ISP field
-- **Persistent returning attacker** — `is_returning` currently resets on every backend pod restart because `_seen_ips` is in-memory; replace with a MongoDB lookup (`db.events.count_documents({"src_ip": ip})` before insert)
-
----
-
 ## Intelligence
 
 - **Vulnerability/probe fingerprinting** — classify attack patterns into two tiers:

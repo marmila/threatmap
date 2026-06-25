@@ -21,7 +21,6 @@ KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD", "")
 HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
-_seen_ips: dict[str, int] = {}  # ip -> attack count this session (for returning attacker detection)
 _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
 
 _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
@@ -34,6 +33,25 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     8001: ("opencanary.mysql.login", "mysql"),
     17001: ("opencanary.redis.command", "redis"),
 }
+
+
+async def _db_check_ip(ip: str, protocol: str) -> tuple[int, bool]:
+    """Returns (prev_event_count, is_multi_protocol). Queries MongoDB so it survives restarts."""
+    db = get_db()
+    prev_count, other_protocols = await asyncio.gather(
+        db.events.count_documents({"src_ip": ip}),
+        db.events.distinct("protocol", {"src_ip": ip, "protocol": {"$nin": [None, protocol]}}),
+    )
+    return prev_count, len(other_protocols) > 0
+
+
+def _get_ip_history(ip: str, protocol: str, loop: asyncio.AbstractEventLoop) -> tuple[int, bool]:
+    try:
+        return asyncio.run_coroutine_threadsafe(
+            _db_check_ip(ip, protocol), loop
+        ).result(timeout=2.0)
+    except Exception:
+        return 0, False
 
 
 def _check_velocity(ip: str) -> bool:
@@ -91,7 +109,7 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
             consumer = KafkaConsumer(KAFKA_TOPIC, **consumer_kwargs)
             logger.info(f"Kafka consumer connected to {KAFKA_BOOTSTRAP}, topic={KAFKA_TOPIC}")
             for msg in consumer:
-                event = _enrich(msg.value)
+                event = _enrich(msg.value, loop)
                 if event:
                     asyncio.run_coroutine_threadsafe(report_to_abuseipdb(event["src_ip"], event["event_type"]), loop)
                     asyncio.run_coroutine_threadsafe(broadcast(event), loop)
@@ -101,9 +119,9 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
             time.sleep(10)
 
 
-def _enrich(raw: dict) -> dict | None:
+def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
     if "logtype" in raw:
-        return _enrich_opencanary(raw)
+        return _enrich_opencanary(raw, loop)
 
     src_ip = raw.get("src_ip")
     if not src_ip:
@@ -115,12 +133,11 @@ def _enrich(raw: dict) -> dict | None:
     if not geo:
         return None
 
+    protocol = raw.get("protocol", "ssh")
     otx_threat, threat_source = is_known_threat(src_ip)
     abuse_threat, abuse_data = check_abuseipdb(src_ip)
     shodan_data = check_shodan(src_ip)
-
-    prev_count = _seen_ips.get(src_ip, 0)
-    _seen_ips[src_ip] = prev_count + 1
+    prev_count, is_multi = _get_ip_history(src_ip, protocol, loop)
     is_hot = _check_velocity(src_ip)
 
     return {
@@ -140,11 +157,12 @@ def _enrich(raw: dict) -> dict | None:
         "path": None,
         "duration": raw.get("duration"),
         "honeypot": raw.get("honeypot_host"),
-        "protocol": raw.get("protocol", "ssh"),
+        "protocol": protocol,
         "is_hot": is_hot,
         "known_threat": otx_threat or abuse_threat,
         "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
         "is_returning": prev_count > 0,
+        "is_multi": is_multi,
         "previous_count": prev_count,
         "abuse_score": abuse_data.get("score", 0),
         "abuse_total_reports": abuse_data.get("total_reports", 0),
@@ -163,7 +181,7 @@ def _enrich(raw: dict) -> dict | None:
     }
 
 
-def _enrich_opencanary(raw: dict) -> dict | None:
+def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
     src_ip = raw.get("src_host", "")
     if not src_ip:
         return None
@@ -190,9 +208,7 @@ def _enrich_opencanary(raw: dict) -> dict | None:
     otx_threat, threat_source = is_known_threat(src_ip)
     abuse_threat, abuse_data = check_abuseipdb(src_ip)
     shodan_data = check_shodan(src_ip)
-
-    prev_count = _seen_ips.get(src_ip, 0)
-    _seen_ips[src_ip] = prev_count + 1
+    prev_count, is_multi = _get_ip_history(src_ip, protocol, loop)
     is_hot = _check_velocity(src_ip)
 
     return {
@@ -217,6 +233,7 @@ def _enrich_opencanary(raw: dict) -> dict | None:
         "known_threat": otx_threat or abuse_threat,
         "threat_source": threat_source if otx_threat else ("AbuseIPDB" if abuse_threat else None),
         "is_returning": prev_count > 0,
+        "is_multi": is_multi,
         "previous_count": prev_count,
         "abuse_score": abuse_data.get("score", 0),
         "abuse_total_reports": abuse_data.get("total_reports", 0),

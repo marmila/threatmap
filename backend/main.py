@@ -234,6 +234,40 @@ async def http_paths_stats():
     return results
 
 
+@app.get("/api/stats/daily")
+async def daily_stats():
+    db = get_db()
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": since}}},
+        {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp", "onError": None}}}},
+        {"$match": {"ts": {"$ne": None}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%dT00:00:00Z", "date": "$ts"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+        {"$project": {"day": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(7)
+    return results
+
+
+@app.get("/api/stats/orgs")
+async def orgs_stats():
+    db = get_db()
+    pipeline = [
+        {"$project": {"org": {"$ifNull": ["$shodan_org", "$abuse_isp"]}}},
+        {"$match": {"org": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$org", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"org": "$_id", "count": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(10)
+    return results
+
+
 @app.get("/api/stats/hourly")
 async def hourly_stats():
     db = get_db()

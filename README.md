@@ -21,12 +21,12 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 - Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey, http=purple, ftp=cyan, mysql=green, redis=orange
 - Hourly bar chart in the stats panel shows attack volume over the last 24 hours
 - Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner + intel source name in detail modal
-- Returning attackers flagged with RPT badge; IPs hitting >10 times/min flagged with HOT badge in the live feed
+- Returning attackers flagged with RPT badge (MongoDB-backed, survives restarts); IPs hitting >10 times/min flagged with HOT badge; IPs seen on multiple protocols flagged with MULTI badge in the live feed
 - Live feed: country flag emojis next to country names; attacks/min gauge; pause/resume to freeze the feed while reading an event
 - Protocol filter pills (SSH / HTTP / FTP / etc.) in the header — click to filter the feed to a single protocol, click again to clear
 - Country drilldown: click any country in TOP SOURCES to filter the live feed to that country only
-- INTEL tab: credentials leaderboard, top shell commands (Cowrie), top HTTP paths probed, top Redis commands issued by attackers
-- STATS tab: attack type breakdown (with progress bars), sensor breakdown (with per-protocol split per honeypot), protocol split, unique attacker IP count, last attack timestamp, peak hour highlighted in hourly chart
+- INTEL tab: credentials leaderboard, top shell commands (Cowrie), top HTTP paths probed, top Redis commands, top hosting providers (ASN/org leaderboard from Shodan/AbuseIPDB data)
+- STATS tab: attack type breakdown (with progress bars), sensor breakdown (with per-protocol split per honeypot), protocol split, unique attacker IP count, last attack timestamp, peak hour highlighted in hourly chart with 24h/7d toggle
 - Click any event in the live feed for full attack detail (credentials, path or Redis command, AbuseIPDB score, Shodan data, geo coords)
 
 ---
@@ -154,7 +154,9 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 |---|---|
 | `GET /api/events/recent?limit=200` | Last N enriched attack events from MongoDB |
 | `GET /api/stats` | Total count + unique IP count + top 10 countries/IPs (with country code) + protocol breakdown + honeypot breakdown (with per-protocol split) + attack type breakdown |
-| `GET /api/stats/hourly` | Attack count per hour for the last 24 hours (used by bar chart) |
+| `GET /api/stats/hourly` | Attack count per hour for the last 24 hours |
+| `GET /api/stats/daily` | Attack count per day for the last 7 days |
+| `GET /api/stats/orgs` | Top 10 attacker hosting providers (Shodan org or AbuseIPDB ISP) |
 | `GET /api/stats/credentials` | Top 10 usernames and top 10 passwords tried across all attacks |
 | `GET /api/stats/commands` | Top 10 shell commands executed in `cowrie.command.input` events |
 | `GET /api/stats/http-paths` | Top 15 HTTP paths probed against OpenCanary HTTP honeypot |
@@ -203,6 +205,7 @@ Each event (WebSocket or REST) contains:
   "shodan_last_update": "2026-06-15T12:00:00",
   "threat_source": "Feodo Tracker",
   "is_returning": true,
+  "is_multi": true,
   "previous_count": 14,
   "is_hot": false
 }

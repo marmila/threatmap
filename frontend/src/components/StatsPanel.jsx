@@ -103,35 +103,60 @@ function Tab({ label, active, onClick }) {
   )
 }
 
-function HourlyChart({ data }) {
+function HourlyChart({ data, dailyData = [] }) {
   const [hovered, setHovered] = useState(null)
-  const W = 248, H = 44, barW = W / 24
-  if (!data || data.length === 0) return null
-  const max = Math.max(...data.map(d => d.count), 1)
-  const now = new Date()
-  const hours = Array.from({ length: 24 }, (_, i) => {
-    const h = new Date(now)
-    h.setUTCMinutes(0, 0, 0)
-    h.setUTCHours(h.getUTCHours() - 23 + i)
-    const prefix = h.toISOString().substring(0, 13)
-    const found = data.find(d => d.hour && d.hour.startsWith(prefix))
-    return { count: found ? found.count : 0, label: `${String(h.getUTCHours()).padStart(2, '0')}:00` }
-  })
-  const tip = hovered !== null ? hours[hovered] : null
+  const [period, setPeriod] = useState('24h')
+  const W = 248, H = 44
+
+  const bars = period === '7d'
+    ? Array.from({ length: 7 }, (_, i) => {
+        const d = new Date()
+        d.setUTCHours(0, 0, 0, 0)
+        d.setUTCDate(d.getUTCDate() - 6 + i)
+        const prefix = d.toISOString().substring(0, 10)
+        const found = dailyData.find(r => r.day && r.day.startsWith(prefix))
+        return { count: found ? found.count : 0, label: prefix.substring(5) }
+      })
+    : Array.from({ length: 24 }, (_, i) => {
+        const h = new Date()
+        h.setUTCMinutes(0, 0, 0)
+        h.setUTCHours(h.getUTCHours() - 23 + i)
+        const prefix = h.toISOString().substring(0, 13)
+        const found = data.find(r => r.hour && r.hour.startsWith(prefix))
+        return { count: found ? found.count : 0, label: `${String(h.getUTCHours()).padStart(2, '0')}:00` }
+      })
+
+  const barW = W / bars.length
+  const max = Math.max(...bars.map(b => b.count), 1)
+  const peakIdx = bars.reduce((pi, b, i) => b.count > bars[pi].count ? i : pi, 0)
+  const tip = hovered !== null ? bars[hovered] : null
   const tipX = hovered !== null ? Math.min(hovered * barW, W - 72) : 0
   const tipBarH = tip ? Math.max(2, (tip.count / max) * (H - 4)) : 0
   const tipY = tip ? Math.max(0, H - tipBarH - 20) : 0
-  const peakIdx = hours.reduce((pi, h, i) => h.count > hours[pi].count ? i : pi, 0)
+
   return (
     <div>
-      <div style={s.label}>ATTACKS / HOUR (24H)</div>
-      <svg width={W} height={H} style={{ display: 'block', marginTop: '4px', cursor: 'crosshair' }}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+        <div style={s.label}>{period === '7d' ? 'ATTACKS / DAY (7D)' : 'ATTACKS / HOUR (24H)'}</div>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {['24h', '7d'].map(p => (
+            <button key={p} onClick={() => { setPeriod(p); setHovered(null) }} style={{
+              background: period === p ? '#1e2535' : 'none',
+              border: `1px solid ${period === p ? '#334155' : '#1e2535'}`,
+              color: period === p ? '#f1f5f9' : '#475569',
+              cursor: 'pointer', fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+              fontFamily: "'Courier New', monospace", letterSpacing: '0.5px',
+            }}>{p}</button>
+          ))}
+        </div>
+      </div>
+      <svg width={W} height={H} style={{ display: 'block', marginTop: '2px', cursor: 'crosshair' }}
         onMouseMove={e => {
           const rect = e.currentTarget.getBoundingClientRect()
-          setHovered(Math.max(0, Math.min(23, Math.floor((e.clientX - rect.left) / barW))))
+          setHovered(Math.max(0, Math.min(bars.length - 1, Math.floor((e.clientX - rect.left) / barW))))
         }}
         onMouseLeave={() => setHovered(null)}>
-        {hours.map(({ count }, i) => {
+        {bars.map(({ count }, i) => {
           const barH = Math.max(2, (count / max) * (H - 4))
           const isPeak = i === peakIdx && count > 0
           return (
@@ -179,9 +204,8 @@ export default function StatsPanel({
   events, total, topCountries, topIps = [], connected, isMobile = false,
   hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] },
   commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
-  httpPathsData = [],
-  redisCommandsData = [],
-  uniqueIps = 0,
+  httpPathsData = [], redisCommandsData = [], uniqueIps = 0,
+  dailyData = [], orgsData = [],
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
@@ -292,6 +316,7 @@ export default function StatsPanel({
             <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
               {e._count > 1 && <span style={s.countBadge}>×{e._count}</span>}
               {e.is_hot && <span style={{ ...s.badge, background: '#7c2d12', color: '#fb923c' }}>HOT</span>}
+              {e.is_multi && <span style={{ ...s.badge, background: '#1e1b4b', color: '#818cf8' }}>MULTI</span>}
               {e.is_returning && <span style={{ ...s.badge, background: '#1c1917', color: '#a8a29e' }}>RPT</span>}
               {e.protocol === 'telnet' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>TEL</span>}
               {e.protocol === 'http' && <span style={{ ...s.badge, background: '#2e1065', color: '#a78bfa' }}>HTTP</span>}
@@ -381,7 +406,7 @@ export default function StatsPanel({
                   ))}
                 </div>
               )}
-              <HourlyChart data={hourlyData} />
+              <HourlyChart data={hourlyData} dailyData={dailyData} />
               {honeypotBreakdown.length > 0 && (
                 <div style={s.section}>
                   <div style={s.label}>SENSORS</div>
@@ -485,6 +510,17 @@ export default function StatsPanel({
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                       <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
                       <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {orgsData.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>TOP PROVIDERS</div>
+                  {orgsData.slice(0, 6).map((o, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
@@ -703,6 +739,17 @@ export default function StatsPanel({
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
                     <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {orgsData.length > 0 && (
+              <div style={s.section}>
+                <div style={s.label}>TOP PROVIDERS</div>
+                {orgsData.slice(0, 8).map((o, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
