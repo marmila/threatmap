@@ -35,14 +35,28 @@ VULN_SIGNATURES = [
 ]
 
 
-def _match_vuln_hint(path, command, password):
+EVENT_TYPE_HINTS = {
+    "cowrie.login.failed":      {"label": "SSH brute force", "tier": "technique"},
+    "cowrie.login.success":     {"label": "SSH credential compromise", "tier": "technique"},
+    "cowrie.command.input":     {"label": "SSH command execution", "tier": "technique"},
+    "cowrie.command.failed":    {"label": "SSH command execution", "tier": "technique"},
+    "opencanary.mysql.login":   {"label": "MySQL brute force", "tier": "technique"},
+    "opencanary.ftp.login":     {"label": "FTP brute force", "tier": "technique"},
+    "opencanary.telnet.login":  {"label": "Telnet brute force", "tier": "technique"},
+    "opencanary.ssh.login":     {"label": "SSH brute force", "tier": "technique"},
+    "opencanary.http.request":  {"label": "HTTP scan", "tier": "technique"},
+    "opencanary.redis.command": {"label": "Redis probe", "tier": "technique"},
+}
+
+
+def _match_vuln_hint(path, command, password, event_type=None):
     candidate = {"path": path, "command": command, "password": password}
     for sig in VULN_SIGNATURES:
         for field in sig["fields"]:
             value = candidate.get(field)
             if value and re.search(sig["pattern"], value, re.IGNORECASE):
                 return {"label": sig["label"], "cve": sig.get("cve"), "tier": sig["tier"]}
-    return None
+    return EVENT_TYPE_HINTS.get(event_type)
 
 
 async def backfill():
@@ -52,21 +66,16 @@ async def backfill():
     total = await db.events.count_documents({"vuln_hint": None})
     print(f"Events without vuln_hint: {total}")
 
+    # Now matches ALL events without vuln_hint (event_type fallback covers everything)
     cursor = db.events.find(
-        {
-            "vuln_hint": None,
-            "$or": [
-                {"path": {"$nin": [None, ""]}},
-                {"command": {"$nin": [None, ""]}},
-            ],
-        },
-        {"_id": 1, "path": 1, "command": 1, "password": 1},
+        {"vuln_hint": None},
+        {"_id": 1, "path": 1, "command": 1, "password": 1, "event_type": 1},
     )
 
     checked = 0
     matched = 0
     async for doc in cursor:
-        hint = _match_vuln_hint(doc.get("path"), doc.get("command"), doc.get("password"))
+        hint = _match_vuln_hint(doc.get("path"), doc.get("command"), doc.get("password"), doc.get("event_type"))
         if hint:
             await db.events.update_one({"_id": doc["_id"]}, {"$set": {"vuln_hint": hint}})
             matched += 1

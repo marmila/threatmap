@@ -53,6 +53,20 @@ VULN_SIGNATURES = [
 ]
 
 
+_EVENT_TYPE_HINTS: dict[str, dict] = {
+    "cowrie.login.failed":      {"label": "SSH brute force", "tier": "technique"},
+    "cowrie.login.success":     {"label": "SSH credential compromise", "tier": "technique"},
+    "cowrie.command.input":     {"label": "SSH command execution", "tier": "technique"},
+    "cowrie.command.failed":    {"label": "SSH command execution", "tier": "technique"},
+    "opencanary.mysql.login":   {"label": "MySQL brute force", "tier": "technique"},
+    "opencanary.ftp.login":     {"label": "FTP brute force", "tier": "technique"},
+    "opencanary.telnet.login":  {"label": "Telnet brute force", "tier": "technique"},
+    "opencanary.ssh.login":     {"label": "SSH brute force", "tier": "technique"},
+    "opencanary.http.request":  {"label": "HTTP scan", "tier": "technique"},
+    "opencanary.redis.command": {"label": "Redis probe", "tier": "technique"},
+}
+
+
 def _match_vuln_hint(path: str | None, command: str | None, password: str | None) -> dict | None:
     candidate = {"path": path, "command": command, "password": password}
     for sig in VULN_SIGNATURES:
@@ -218,7 +232,7 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
         "shodan_hostnames": shodan_data.get("hostnames", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
-        "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")),
+        "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")) or _EVENT_TYPE_HINTS.get(raw.get("eventid", "")),
     }
 
 
@@ -290,7 +304,7 @@ def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | Non
         "shodan_hostnames": shodan_data.get("hostnames", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
-        "vuln_hint": _match_vuln_hint(path, command, password),
+        "vuln_hint": _match_vuln_hint(path, command, password) or _EVENT_TYPE_HINTS.get(event_type),
     }
 
 

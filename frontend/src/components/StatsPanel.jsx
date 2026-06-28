@@ -328,6 +328,11 @@ export default function StatsPanel({
           </div>
           <div style={s.detail}>{flag(e.src_country_code)}{flag(e.src_country_code) ? ' ' : ''}{e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}</div>
           <div style={s.detail}>{e.event_type}{e.username ? ` · ${e.username}` : ''}</div>
+          {e.vuln_hint && (
+            <div style={{ fontSize: '8px', marginTop: '2px', color: e.vuln_hint.tier === 'cve' ? '#ef4444' : '#818cf8', letterSpacing: '0.5px' }}>
+              {e.vuln_hint.tier === 'cve' ? '⚠ ' : '◉ '}{e.vuln_hint.label}{e.vuln_hint.cve ? ` · ${e.vuln_hint.cve}` : ''}
+            </div>
+          )}
         </div>
       ))}
     </div>
