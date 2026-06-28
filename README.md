@@ -14,20 +14,9 @@ Real-time global attack visualization - SSH/Telnet/HTTP/FTP/MySQL/Redis honeypot
 
 ## What it does
 
-- [Cowrie](https://github.com/cowrie/cowrie) SSH+Telnet honeypots and [OpenCanary](https://github.com/thinkst/opencanary) (HTTP/FTP/MySQL/Redis) on two Oracle Cloud VMs (eu-milan-1) capture real attacks from the internet
-- Events stream over WireGuard VPN → Fluentd → Kafka
-- Python backend enriches each event with MaxMind GeoLite2 (country, city, lat/lon), Shodan (open ports, CVEs, tags, org), and cross-references AlienVault OTX + Abuse.ch + AbuseIPDB threat feeds
-- React frontend renders animated attack arcs on a 3D globe in real time via WebSocket, with floating country/city labels at attack origins
-- Arc and point colors coded by event type: login.success=red, login.failed=amber, command.input=orange, connect=grey, http=purple, ftp=cyan, mysql=green, redis=orange
-- Hourly bar chart in the stats panel shows attack volume over the last 24 hours
-- Known threat IPs (AbuseIPDB score ≥50 or OTX/Feodo match) flagged with KNOWN THREAT ACTOR banner + intel source name in detail modal
-- Returning attackers flagged with RPT badge (MongoDB-backed, survives restarts); IPs hitting >10 times/min flagged with HOT badge; IPs seen on multiple protocols flagged with MULTI badge in the live feed
-- Live feed: country flag emojis next to country names; attacks/min gauge; pause/resume to freeze the feed while reading an event
-- Protocol filter pills (SSH / HTTP / FTP / etc.) in the header — click to filter the feed to a single protocol, click again to clear
-- Country drilldown: click any country in TOP SOURCES to filter the live feed to that country only
-- INTEL tab: credentials leaderboard, top shell commands (Cowrie), top HTTP paths probed, top Redis commands, top hosting providers (ASN/org leaderboard from Shodan/AbuseIPDB data)
-- STATS tab: attack type breakdown (with progress bars), sensor breakdown (with per-protocol split per honeypot), protocol split, unique attacker IP count, last attack timestamp, peak hour highlighted in hourly chart with 24h/7d toggle
-- Click any event in the live feed for full attack detail (credentials, path or Redis command, AbuseIPDB score, Shodan data, geo coords)
+Cowrie (SSH/Telnet) and OpenCanary (HTTP/FTP/MySQL/Redis) honeypots run on two Oracle Cloud VMs and capture real attacks from the internet. Events flow over WireGuard VPN → Fluentd → Kafka into a Python backend that enriches each one with geolocation (MaxMind GeoLite2), threat intelligence (AlienVault OTX, Abuse.ch, AbuseIPDB), and host data (Shodan: open ports, CVEs, software banners, HTTP titles, SSL certs). Enriched events are persisted to MongoDB and broadcast over WebSocket to a React frontend that renders them as animated arcs on a 3D globe in real time.
+
+The stats panel has three tabs. **Feed** shows a live deduped event stream with attacker badges (HOT, MULTI, RPT, THREAT) and the detected attack technique inline. **Stats** breaks down attack types, protocols, and sensor activity. **Intel** shows credential leaderboards, top shell commands and HTTP paths, and a PROBES DETECTED leaderboard that classifies attacks into CVE-tier signatures (Log4Shell, Shellshock, PHPUnit RCE) and technique-tier patterns (C2 beacon, SSH key injection, system recon, brute force). Clicking any event opens a detail modal with the full attacker profile: geo, credentials, AbuseIPDB score, Shodan data, and all techniques observed from that IP.
 
 ---
 
