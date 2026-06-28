@@ -1,14 +1,18 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import close_db, get_db
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller
+from tty_parser import parse as parse_ttylog
+
+TTY_UPLOAD_SECRET = os.getenv("TTY_UPLOAD_SECRET", "")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -319,6 +323,42 @@ async def vulns_stats():
     ]
     results = await db.events.aggregate(pipeline).to_list(10)
     return results
+
+
+@app.post("/api/session/{session_id}/ttylog")
+async def upload_ttylog(
+    session_id: str,
+    request: Request,
+    x_upload_secret: str = Header(default=""),
+):
+    if TTY_UPLOAD_SECRET and x_upload_secret != TTY_UPLOAD_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty body")
+    db = get_db()
+    await db.tty_logs.replace_one(
+        {"session_id": session_id},
+        {
+            "session_id": session_id,
+            "raw": raw,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        },
+        upsert=True,
+    )
+    return {"ok": True, "session_id": session_id}
+
+
+@app.get("/api/session/{session_id}/frames")
+async def session_frames(session_id: str):
+    db = get_db()
+    doc = await db.tty_logs.find_one({"session_id": session_id}, {"raw": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        return parse_ttylog(bytes(doc["raw"]))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @app.get("/healthz")

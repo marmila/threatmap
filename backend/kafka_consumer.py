@@ -237,6 +237,7 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
         "shodan_http_titles": shodan_data.get("http_titles", []),
         "shodan_ssl_cns": shodan_data.get("ssl_cns", []),
         "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")) or _EVENT_TYPE_HINTS.get(raw.get("eventid", "")),
+        "session": raw.get("session"),
     }
 
 

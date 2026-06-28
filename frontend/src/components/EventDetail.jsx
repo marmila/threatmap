@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useWindowSize } from '../hooks/useWindowSize.js'
+import SessionPlayer from './SessionPlayer.jsx'
 
 const EVENT_LABELS = {
   'cowrie.login.success':      'LOGIN SUCCESS',
@@ -137,6 +138,7 @@ function LinkRow({ label, href, value, valueStyle }) {
 export default function EventDetail({ event, onClose }) {
   const { isMobile } = useWindowSize()
   const [ipStats, setIpStats] = useState(null)
+  const [showPlayer, setShowPlayer] = useState(false)
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -385,8 +387,28 @@ export default function EventDetail({ event, onClose }) {
             <Row label="DURATION" value={`${Number(event.duration).toFixed(1)}s`} valueStyle={s.dimVal} />
           )}
           <Row label="EVENT ID" value={event.event_type} valueStyle={s.dimVal} />
+          {event.session && event.event_type === 'cowrie.login.success' && (
+            <div style={{ marginTop: '10px' }}>
+              <button
+                onClick={() => setShowPlayer(true)}
+                style={{
+                  width: '100%', padding: '7px 0',
+                  background: '#0d1f0d', border: '1px solid #166534',
+                  color: '#4ade80', cursor: 'pointer', borderRadius: '5px',
+                  fontSize: '9px', fontFamily: "'Courier New', monospace",
+                  letterSpacing: '2px', fontWeight: 'bold',
+                }}
+              >
+                ▶ REPLAY SESSION
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {showPlayer && (
+        <SessionPlayer sessionId={event.session} onClose={() => setShowPlayer(false)} />
+      )}
     </>
   )
 }
