@@ -181,14 +181,6 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
     if not src_ip:
         return None
 
-    if raw.get("eventid") == "cowrie.log.closed":
-        ttylog_path = raw.get("ttylog", "")
-        sha = ttylog_path.split("/")[-1] if ttylog_path else None
-        session = raw.get("session")
-        if sha and session and len(sha) == 64:
-            asyncio.run_coroutine_threadsafe(_store_tty_map(session, sha), loop)
-        return None
-
     if raw.get("eventid") in _SKIP_EVENT_TYPES:
         return None
 
@@ -246,7 +238,6 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
         "shodan_http_titles": shodan_data.get("http_titles", []),
         "shodan_ssl_cns": shodan_data.get("ssl_cns", []),
         "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")) or _EVENT_TYPE_HINTS.get(raw.get("eventid", "")),
-        "session": raw.get("session"),
     }
 
 
@@ -334,13 +325,3 @@ async def _persist(event: dict):
         logger.warning(f"MongoDB write failed: {e}")
 
 
-async def _store_tty_map(session_id: str, sha: str):
-    try:
-        db = get_db()
-        await db.tty_session_map.replace_one(
-            {"session_id": session_id},
-            {"session_id": session_id, "sha": sha},
-            upsert=True,
-        )
-    except Exception as e:
-        logger.warning(f"TTY session map write failed: {e}")
