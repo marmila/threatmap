@@ -352,7 +352,13 @@ async def upload_ttylog(
 @app.get("/api/session/{session_id}/frames")
 async def session_frames(session_id: str):
     db = get_db()
+    # session_id may be a Cowrie session hex (e.g. 85215aef6bc4) or a SHA256 directly
     doc = await db.tty_logs.find_one({"session_id": session_id}, {"raw": 1})
+    if not doc:
+        # look up SHA via session map built from cowrie.log.closed events
+        mapping = await db.tty_session_map.find_one({"session_id": session_id})
+        if mapping:
+            doc = await db.tty_logs.find_one({"session_id": mapping["sha"]}, {"raw": 1})
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
     try:

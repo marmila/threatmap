@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Honeypot-side TTY log uploader.
 
-Watches /var/lib/cowrie/log/tty/ for newly completed Cowrie session logs
+Watches the Cowrie TTY log directory for newly completed session recordings
 and uploads each one to the threatmap backend.
 
+Cowrie names TTY logs by SHA256 hash of the content (no extension),
+e.g. /var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty/f20073be...
+
 Required env vars:
-  BACKEND_URL       - e.g. http://10.0.0.1:8000
-  TTY_UPLOAD_SECRET - must match the backend TTY_UPLOAD_SECRET env var
+  BACKEND_URL       - e.g. https://threatmap.homelab.marmilan.com
+  TTY_UPLOAD_SECRET - must match backend TTY_UPLOAD_SECRET env var (optional)
 
 Optional:
-  TTY_LOG_DIR       - default /var/lib/cowrie/log/tty
-  POLL_INTERVAL     - seconds between scans (default 15)
-  STABLE_SECS       - file must not change for this long before uploading (default 10)
+  TTY_LOG_DIR    - default /var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty
+  POLL_INTERVAL  - seconds between scans (default 15)
+  STABLE_SECS    - file must not change for this long before uploading (default 10)
 """
 
 import glob
@@ -21,30 +24,26 @@ import time
 
 import requests
 
-BACKEND_URL    = os.getenv("BACKEND_URL", "").rstrip("/")
-UPLOAD_SECRET  = os.getenv("TTY_UPLOAD_SECRET", "")
-TTY_LOG_DIR    = os.getenv("TTY_LOG_DIR", "/var/lib/cowrie/log/tty")
-POLL_INTERVAL  = int(os.getenv("POLL_INTERVAL", "15"))
-STABLE_SECS    = int(os.getenv("STABLE_SECS", "10"))
+BACKEND_URL   = os.getenv("BACKEND_URL", "").rstrip("/")
+UPLOAD_SECRET = os.getenv("TTY_UPLOAD_SECRET", "")
+TTY_LOG_DIR   = os.getenv("TTY_LOG_DIR", "/var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty")
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "15"))
+STABLE_SECS   = int(os.getenv("STABLE_SECS", "10"))
 
 if not BACKEND_URL:
     sys.exit("BACKEND_URL is required")
 
 
-def extract_session(path: str) -> str:
-    # Cowrie filename format: 20260628-143022-{session_id}.log
-    name = os.path.basename(path).removesuffix(".log")
-    parts = name.split("-")
-    return parts[-1] if len(parts) >= 3 else name
-
-
 def upload(path: str) -> bool:
-    session_id = extract_session(path)
+    # The filename IS the SHA256 hash — use it directly as the upload key
+    sha = os.path.basename(path)
     try:
         with open(path, "rb") as f:
             data = f.read()
+        if not data:
+            return True  # skip empty files silently
         r = requests.post(
-            f"{BACKEND_URL}/api/session/{session_id}/ttylog",
+            f"{BACKEND_URL}/api/session/{sha}/ttylog",
             data=data,
             headers={
                 "Content-Type": "application/octet-stream",
@@ -53,11 +52,11 @@ def upload(path: str) -> bool:
             timeout=30,
         )
         if r.status_code == 200:
-            print(f"[ok] {session_id}", flush=True)
+            print(f"[ok] {sha[:16]}...", flush=True)
             return True
-        print(f"[fail] {session_id}: HTTP {r.status_code}", flush=True)
+        print(f"[fail] {sha[:16]}...: HTTP {r.status_code}", flush=True)
     except Exception as e:
-        print(f"[error] {session_id}: {e}", flush=True)
+        print(f"[error] {sha[:16]}...: {e}", flush=True)
     return False
 
 
@@ -67,8 +66,8 @@ def main():
 
     while True:
         now = time.time()
-        for path in glob.glob(os.path.join(TTY_LOG_DIR, "*.log")):
-            if path in uploaded:
+        for path in glob.glob(os.path.join(TTY_LOG_DIR, "*")):
+            if not os.path.isfile(path) or path in uploaded:
                 continue
             try:
                 mtime = os.path.getmtime(path)
