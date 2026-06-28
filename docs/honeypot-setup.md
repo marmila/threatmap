@@ -412,6 +412,66 @@ ls /var/lib/docker/volumes/opencanary-logs/_data/   # opencanary.log should appe
 
 ---
 
+## Part 5c — Session Replay: TTY Log Uploader
+
+Cowrie records every interactive SSH session as a binary TTY log file. The uploader watches for new completed sessions and ships them to the ThreatMap backend, which makes them replayable from the attack detail modal.
+
+**TTY log location inside the Docker volume:**
+
+```
+/var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty/
+```
+
+> This is `lib/cowrie/tty/`, **not** `log/cowrie/tty/` — an easy mistake. The `log/` directory only contains JSON event logs.
+
+### Install the uploader
+
+```bash
+curl -o ~/cowrie-tty-uploader.py \
+  https://raw.githubusercontent.com/marmila/threatmap/main/scripts/cowrie-tty-uploader.py
+```
+
+### Install and configure the systemd service
+
+```bash
+sudo curl -o /etc/systemd/system/cowrie-tty-uploader.service \
+  https://raw.githubusercontent.com/marmila/threatmap/main/scripts/cowrie-tty-uploader.service
+```
+
+Create the override to set the correct TTY log path (the base unit has the wrong default):
+
+```bash
+sudo mkdir -p /etc/systemd/system/cowrie-tty-uploader.service.d/
+sudo bash -c 'cat > /etc/systemd/system/cowrie-tty-uploader.service.d/override.conf << EOF
+[Service]
+Environment=TTY_LOG_DIR=/var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty
+EOF'
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable cowrie-tty-uploader
+sudo systemctl start cowrie-tty-uploader
+```
+
+### Verify
+
+```bash
+sudo journalctl -u cowrie-tty-uploader -f
+```
+
+You should see:
+```
+Watching /var/lib/docker/volumes/cowrie-var/_data/lib/cowrie/tty → https://threatmap.homelab.marmilan.com
+[ok] a1b2c3d4
+```
+
+The uploader scans the directory every 15 seconds and uploads any file that hasn't changed in 10+ seconds (session is complete). It also picks up old TTY logs from before the service was installed — replays for historical sessions become available automatically.
+
+---
+
 ## Part 6 — Verify End-to-End Pipeline
 
 From `vpnweb01` or any homelab node:
