@@ -226,6 +226,26 @@ export default function EventDetail({ event, onClose }) {
                 valueStyle={s.dimVal}
               />
             ))}
+            {ipStats.vuln_hints?.length > 0 && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ color: '#475569', fontSize: '9px', letterSpacing: '1px', marginBottom: '4px' }}>TECHNIQUES OBSERVED</div>
+                {ipStats.vuln_hints.map((v, i) => (
+                  <div key={i} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '5px',
+                    padding: '2px 7px', borderRadius: '4px', marginRight: '4px', marginBottom: '4px',
+                    background: v.tier === 'cve' ? '#450a0a' : '#1e1b4b',
+                    border: `1px solid ${v.tier === 'cve' ? '#7f1d1d' : '#312e81'}`,
+                  }}>
+                    <span style={{ color: v.tier === 'cve' ? '#ef4444' : '#818cf8', fontSize: '8px', fontWeight: 'bold' }}>
+                      {v.tier === 'cve' ? '⚠' : '◉'}
+                    </span>
+                    <span style={{ color: '#e2e8f0', fontSize: '9px' }}>
+                      {v.label}{v.cve ? ` · ${v.cve}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

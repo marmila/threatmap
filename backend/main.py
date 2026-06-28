@@ -157,14 +157,29 @@ async def ip_stats(ip: str):
         }},
         {"$sort": {"count": -1}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(20)
+    vuln_pipeline = [
+        {"$match": {"src_ip": ip, "vuln_hint": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": "$vuln_hint.label",
+            "tier": {"$first": "$vuln_hint.tier"},
+            "cve": {"$first": "$vuln_hint.cve"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}},
+        {"$project": {"label": "$_id", "tier": 1, "cve": 1, "count": 1, "_id": 0}},
+    ]
+    results, vuln_results = await asyncio.gather(
+        db.events.aggregate(pipeline).to_list(20),
+        db.events.aggregate(vuln_pipeline).to_list(10),
+    )
     if not results:
-        return {"total_attacks": 0, "first_seen": None, "last_seen": None, "event_breakdown": []}
+        return {"total_attacks": 0, "first_seen": None, "last_seen": None, "event_breakdown": [], "vuln_hints": []}
     return {
         "total_attacks": sum(r["count"] for r in results),
         "first_seen": min(r["first_seen"] for r in results),
         "last_seen": max(r["last_seen"] for r in results),
         "event_breakdown": [{"event_type": r["_id"], "count": r["count"]} for r in results],
+        "vuln_hints": vuln_results,
     }
 
 
