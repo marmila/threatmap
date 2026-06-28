@@ -6,13 +6,6 @@ Backlog of planned improvements, grouped by area. No priority order within secti
 
 ## Intelligence
 
-- **Vulnerability/probe fingerprinting** — classify attack patterns into two tiers:
-  - **CVE** (unambiguous payload match): Log4Shell `${jndi:`, Shellshock `() { :; };`, PHPUnit CVE-2017-9841 path, etc.
-  - **Technique label** (too generic for a CVE): `WordPress brute force`, `Redis RCE attempt`, `Git repo exposure`, `Spring Actuator exposure`, …
-  - Add `vuln_hint` field to enriched events in `kafka_consumer.py` via a static regex lookup table
-  - New `GET /api/stats/vulns` endpoint + "PROBES DETECTED" leaderboard in the INTEL tab
-  - Badge in the EventDetail modal when a match is found
-  - Source for pattern → CVE mapping: GreyNoise tag taxonomy, NVD CVE descriptions, Rapid7 Project Sonar
 - **HTTP POST body capture** — OpenCanary HTTP honeypot currently only logs path; capture request body to see payloads (e.g. login form stuffing, JSON injection attempts)
 - **Password pattern grouping** — cluster top passwords by pattern (numeric-only, `admin`-variants, keyboard walks like `qwerty123`) instead of raw values
 
