@@ -58,6 +58,7 @@ export default function App() {
   const [uniqueIps, setUniqueIps] = useState(0)
   const [dailyData, setDailyData] = useState([])
   const [orgsData, setOrgsData] = useState([])
+  const [vulnsData, setVulnsData] = useState([])
   const arcTimers = useRef([])
 
   const handleEvent = useCallback((event) => {
@@ -94,7 +95,7 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [evRes, stRes, hrRes, credRes, cmdRes, pathsRes, redisRes, dailyRes, orgsRes] = await Promise.all([
+        const [evRes, stRes, hrRes, credRes, cmdRes, pathsRes, redisRes, dailyRes, orgsRes, vulnsRes] = await Promise.all([
           fetch('/api/events/recent?limit=200'),
           fetch('/api/stats'),
           fetch('/api/stats/hourly'),
@@ -104,6 +105,7 @@ export default function App() {
           fetch('/api/stats/redis-commands'),
           fetch('/api/stats/daily'),
           fetch('/api/stats/orgs'),
+          fetch('/api/stats/vulns'),
         ])
         const events = await evRes.json()
         const stats = await stRes.json()
@@ -114,6 +116,7 @@ export default function App() {
         const redisCmds = await redisRes.json()
         const daily = await dailyRes.json()
         const orgs = await orgsRes.json()
+        const vulns = await vulnsRes.json()
         setTotal(stats.total || 0)
         setTopCountries(stats.top_countries || [])
         setTopIps(stats.top_ips || [])
@@ -125,6 +128,7 @@ export default function App() {
         setRedisCommandsData(redisCmds || [])
         setDailyData(daily || [])
         setOrgsData(orgs || [])
+        setVulnsData(vulns || [])
         setHourlyData(hourly || [])
         setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
         setCommandsData(cmds || [])
@@ -167,6 +171,7 @@ export default function App() {
         uniqueIps={uniqueIps}
         dailyData={dailyData}
         orgsData={orgsData}
+        vulnsData={vulnsData}
       />
     </>
   )

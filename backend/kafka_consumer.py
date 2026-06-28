@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Callable, Awaitable
@@ -22,6 +23,34 @@ HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
 
 _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
+
+VULN_SIGNATURES = [
+    # CVE tier — unambiguous payload signatures
+    {"pattern": r"\$\{jndi:", "fields": ["path", "command"], "label": "Log4Shell", "cve": "CVE-2021-44228", "tier": "cve"},
+    {"pattern": r"\(\)\s*\{\s*:;\s*\};", "fields": ["path", "command"], "label": "Shellshock", "cve": "CVE-2014-6271", "tier": "cve"},
+    {"pattern": r"/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin\.php", "fields": ["path"], "label": "PHPUnit RCE", "cve": "CVE-2017-9841", "tier": "cve"},
+    {"pattern": r"(?i)\.php\?[a-z0-9_]+=https?://", "fields": ["path"], "label": "PHP remote include", "cve": "CVE-2011-3379", "tier": "cve"},
+    # Technique tier — behavioral classification
+    {"pattern": r"/wp-login\.php|/xmlrpc\.php", "fields": ["path"], "label": "WordPress brute force", "tier": "technique"},
+    {"pattern": r"/\.git/|/\.env$|/\.htaccess|/\.htpasswd", "fields": ["path"], "label": "Sensitive file exposure", "tier": "technique"},
+    {"pattern": r"/actuator/|/metrics$|/health$|/env$|/dump$", "fields": ["path"], "label": "Spring Actuator scan", "tier": "technique"},
+    {"pattern": r"\b(CONFIG\s+GET|CONFIG\s+SET|SLAVEOF|DEBUG\s+SLEEP)\b", "fields": ["command"], "label": "Redis RCE attempt", "tier": "technique"},
+    {"pattern": r"/(phpmyadmin|pma|adminer)", "fields": ["path"], "label": "DB admin panel scan", "tier": "technique"},
+    {"pattern": r"/cgi-bin/", "fields": ["path"], "label": "CGI scanner", "tier": "technique"},
+    {"pattern": r"(?i)(union\s+select|or\s+1=1|'--)", "fields": ["path", "command"], "label": "SQL injection probe", "tier": "technique"},
+    {"pattern": r"(?i)<script|javascript:|onerror=", "fields": ["path", "command"], "label": "XSS probe", "tier": "technique"},
+]
+
+
+def _match_vuln_hint(path: str | None, command: str | None, password: str | None) -> dict | None:
+    candidate = {"path": path, "command": command, "password": password}
+    for sig in VULN_SIGNATURES:
+        for field in sig["fields"]:
+            value = candidate.get(field)
+            if value and re.search(sig["pattern"], value, re.IGNORECASE):
+                return {"label": sig["label"], "cve": sig.get("cve"), "tier": sig["tier"]}
+    return None
+
 
 _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     2000: ("opencanary.ftp.login", "ftp"),
@@ -178,6 +207,7 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
         "shodan_hostnames": shodan_data.get("hostnames", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
+        "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")),
     }
 
 
@@ -249,6 +279,7 @@ def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | Non
         "shodan_hostnames": shodan_data.get("hostnames", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
+        "vuln_hint": _match_vuln_hint(path, command, password),
     }
 
 

@@ -205,7 +205,7 @@ export default function StatsPanel({
   hourlyData = [], credentialsData = { top_usernames: [], top_passwords: [] },
   commandsData = [], protocolBreakdown = [], honeypotBreakdown = [], eventTypeBreakdown = [],
   httpPathsData = [], redisCommandsData = [], uniqueIps = 0,
-  dailyData = [], orgsData = [],
+  dailyData = [], orgsData = [], vulnsData = [],
 }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [selected, setSelected] = useState(null)
@@ -525,6 +525,22 @@ export default function StatsPanel({
                   ))}
                 </div>
               )}
+              {vulnsData.length > 0 && (
+                <div style={s.section}>
+                  <div style={s.label}>PROBES DETECTED</div>
+                  {vulnsData.slice(0, 6).map((v, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+                        <span style={{ flexShrink: 0, fontSize: '8px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
+                          {v.tier === 'cve' ? 'CVE' : 'TEC'}
+                        </span>
+                        <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
+                      </span>
+                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{v.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -750,6 +766,22 @@ export default function StatsPanel({
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
                     <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {vulnsData.length > 0 && (
+              <div style={s.section}>
+                <div style={s.label}>PROBES DETECTED</div>
+                {vulnsData.slice(0, 8).map((v, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+                      <span style={{ flexShrink: 0, fontSize: '8px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
+                        {v.tier === 'cve' ? 'CVE' : 'TEC'}
+                      </span>
+                      <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
+                    </span>
+                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{v.count}</span>
                   </div>
                 ))}
               </div>

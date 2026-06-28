@@ -287,6 +287,25 @@ async def hourly_stats():
     return results
 
 
+@app.get("/api/stats/vulns")
+async def vulns_stats():
+    db = get_db()
+    pipeline = [
+        {"$match": {"vuln_hint": {"$nin": [None, ""]}, "vuln_hint.label": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": "$vuln_hint.label",
+            "count": {"$sum": 1},
+            "cve": {"$first": "$vuln_hint.cve"},
+            "tier": {"$first": "$vuln_hint.tier"},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {"label": "$_id", "count": 1, "cve": 1, "tier": 1, "_id": 0}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(10)
+    return results
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}

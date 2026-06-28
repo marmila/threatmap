@@ -159,7 +159,7 @@ export default function EventDetail({ event, onClose }) {
   const badge = EVENT_BADGE[event.event_type] || DEFAULT_BADGE
   const label = EVENT_LABELS[event.event_type] || event.event_type
 
-  const hasAttackDetail = event.username || event.password || event.command || event.path
+  const hasAttackDetail = event.username || event.password || event.command || event.path || event.vuln_hint
   const hasAbuseData = event.abuse_score > 0
 
   return (
@@ -233,6 +233,21 @@ export default function EventDetail({ event, onClose }) {
         {hasAttackDetail && (
           <div style={s.section}>
             <div style={s.sectionLabel}>ATTACK</div>
+            {event.vuln_hint && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '3px 8px', borderRadius: '4px', marginBottom: '8px',
+                background: event.vuln_hint.tier === 'cve' ? '#450a0a' : '#3d2700',
+                border: `1px solid ${event.vuln_hint.tier === 'cve' ? '#7f1d1d' : '#78350f'}`,
+              }}>
+                <span style={{ color: event.vuln_hint.tier === 'cve' ? '#ef4444' : '#fbbf24', fontSize: '8px', fontWeight: 'bold', letterSpacing: '1px' }}>
+                  {event.vuln_hint.tier === 'cve' ? '⚠ CVE' : '◉ TECHNIQUE'}
+                </span>
+                <span style={{ color: '#f1f5f9', fontSize: '9px' }}>
+                  {event.vuln_hint.label}{event.vuln_hint.cve ? ` · ${event.vuln_hint.cve}` : ''}
+                </span>
+              </div>
+            )}
             {event.command && (
               <Row label="COMMAND" value={event.command} valueStyle={s.command} />
             )}
