@@ -18,8 +18,6 @@ Cowrie (SSH/Telnet) and OpenCanary (HTTP/FTP/MySQL/Redis) honeypots run on two O
 
 The stats panel has three tabs. **Feed** shows a live deduped event stream with attacker badges (HOT, MULTI, RPT, THREAT) and the detected attack technique inline. **Stats** breaks down attack types, protocols, and sensor activity. **Intel** shows credential leaderboards, top shell commands and HTTP paths, and a PROBES DETECTED leaderboard that classifies attacks into CVE-tier signatures (Log4Shell, Shellshock, PHPUnit RCE) and technique-tier patterns (C2 beacon, SSH key injection, system recon, brute force). Clicking any event opens a detail modal with the full attacker profile: geo, credentials, AbuseIPDB score, Shodan data, and all techniques observed from that IP.
 
-SSH login success events include a **▶ REPLAY SESSION** button that opens a terminal-style player and replays the attacker's exact TTY session — keystrokes, responses, and timing — using the binary logs Cowrie records for every interactive session.
-
 ---
 
 ## Stack
@@ -44,7 +42,6 @@ threatmap/
 ├── backend/
 │   ├── main.py              FastAPI app, WebSocket broadcaster, REST endpoints
 │   ├── kafka_consumer.py    Kafka consumer, GeoIP enrichment, MongoDB persistence
-│   ├── tty_parser.py        Cowrie binary TTY log parser (COWRIETTYLOG format → frames)
 │   ├── geoip.py             MaxMind GeoLite2 wrapper
 │   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP AbuseIPDB check (24h cache); Shodan host lookup (7d cache); auto-reports attackers
 │   ├── db.py                Async MongoDB connection (Motor)
@@ -56,8 +53,7 @@ threatmap/
 │   │   ├── components/
 │   │   │   ├── GlobeMap.jsx     react-globe.gl 3D globe with arc + point layers
 │   │   │   ├── StatsPanel.jsx   Live feed, top countries, total counter
-│   │   │   ├── EventDetail.jsx  Click-to-expand modal with full attack detail
-│   │   │   └── SessionPlayer.jsx Terminal-style TTY session replay modal
+│   │   │   └── EventDetail.jsx  Click-to-expand modal with full attack detail
 │   │   └── hooks/
 │   │       ├── useWebSocket.js  Auto-reconnecting WebSocket hook
 │   │       └── useWindowSize.js Reactive window dimensions + isMobile flag (< 768px)
@@ -65,9 +61,6 @@ threatmap/
 │   ├── vite.config.js
 │   ├── nginx.conf
 │   └── Dockerfile
-├── scripts/
-│   ├── cowrie-tty-uploader.py      Polls /var/lib/cowrie/log/tty on honeypot VMs, uploads completed sessions to backend
-│   └── cowrie-tty-uploader.service systemd unit for the uploader (runs on honeypot VMs)
 ├── docs/
 │   ├── honeypot-setup.md    Full VM setup guide (WireGuard, Cowrie, Fluent-Bit)
 │   └── threatmap-architecture.png
@@ -95,7 +88,6 @@ threatmap/
 | `SHODAN_API_KEY` | - | Shodan Membership API key - per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
-| `TTY_UPLOAD_SECRET` | - | Shared secret for `POST /api/session/{id}/ttylog` — must match the value set on honeypot VMs; if unset the endpoint is open |
 
 ---
 
@@ -160,8 +152,6 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 | `GET /api/stats/redis-commands` | Top 15 Redis commands issued against OpenCanary Redis honeypot |
 | `GET /api/stats/vulns` | Top 10 attack techniques / CVE signatures across all events |
 | `GET /api/ip/{ip}/stats` | Per-IP history: total attacks, first/last seen, event type breakdown, techniques observed |
-| `POST /api/session/{id}/ttylog` | Upload raw Cowrie TTY log binary from honeypot VM (auth: `X-Upload-Secret` header) |
-| `GET /api/session/{id}/frames` | Return parsed TTY log as timestamped frames for frontend replay |
 | `WS /ws/events` | Live event stream (JSON, one event per message) |
 | `GET /healthz` | Liveness probe |
 
@@ -208,7 +198,6 @@ Each event (WebSocket or REST) contains:
   "is_multi": true,
   "previous_count": 14,
   "is_hot": false,
-  "session": "a1b2c3d4",
   "vuln_hint": { "label": "SSH key injection", "cve": null, "tier": "technique" }
 }
 ```
