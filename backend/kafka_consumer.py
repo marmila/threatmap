@@ -230,8 +230,12 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
         "shodan_vulns": shodan_data.get("vulns", []),
         "shodan_org": shodan_data.get("org"),
         "shodan_hostnames": shodan_data.get("hostnames", []),
+        "shodan_domains": shodan_data.get("domains", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
+        "shodan_banners": shodan_data.get("banners", []),
+        "shodan_http_titles": shodan_data.get("http_titles", []),
+        "shodan_ssl_cns": shodan_data.get("ssl_cns", []),
         "vuln_hint": _match_vuln_hint(None, raw.get("input"), raw.get("password")) or _EVENT_TYPE_HINTS.get(raw.get("eventid", "")),
     }
 
@@ -302,8 +306,12 @@ def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | Non
         "shodan_vulns": shodan_data.get("vulns", []),
         "shodan_org": shodan_data.get("org"),
         "shodan_hostnames": shodan_data.get("hostnames", []),
+        "shodan_domains": shodan_data.get("domains", []),
         "shodan_os": shodan_data.get("os"),
         "shodan_last_update": shodan_data.get("last_update"),
+        "shodan_banners": shodan_data.get("banners", []),
+        "shodan_http_titles": shodan_data.get("http_titles", []),
+        "shodan_ssl_cns": shodan_data.get("ssl_cns", []),
         "vuln_hint": _match_vuln_hint(path, command, password) or _EVENT_TYPE_HINTS.get(event_type),
     }
 

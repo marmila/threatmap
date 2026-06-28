@@ -88,6 +88,23 @@ def check_shodan(ip: str) -> dict:
             )
             if r.status_code == 200:
                 d = r.json()
+                services = d.get("data") or []
+                banners = []
+                http_titles = []
+                ssl_cns = []
+                for svc in services:
+                    product = svc.get("product")
+                    version = svc.get("version")
+                    if product:
+                        label = f"{product} {version}".strip() if version else product
+                        if label not in banners:
+                            banners.append(label)
+                    title = (svc.get("http") or {}).get("title")
+                    if title and title.strip() and title not in http_titles:
+                        http_titles.append(title.strip())
+                    cn = (((svc.get("ssl") or {}).get("cert") or {}).get("subject") or {}).get("CN")
+                    if cn and cn not in ssl_cns:
+                        ssl_cns.append(cn)
                 data = {
                     "ports": sorted(d.get("ports", [])),
                     "tags": d.get("tags", []),
@@ -96,8 +113,12 @@ def check_shodan(ip: str) -> dict:
                     "isp": d.get("isp"),
                     "asn": d.get("asn"),
                     "hostnames": d.get("hostnames", []),
+                    "domains": d.get("domains", []),
                     "os": d.get("os"),
                     "last_update": d.get("last_update"),
+                    "banners": banners[:5],
+                    "http_titles": http_titles[:3],
+                    "ssl_cns": ssl_cns[:3],
                 }
                 _shodan_cache[ip] = (data, now)
                 return data

@@ -345,7 +345,19 @@ export default function EventDetail({ event, onClose }) {
             {event.shodan_ports?.length > 0 && (
               <Row label="OPEN PORTS" value={event.shodan_ports.slice(0, 12).join(', ')} valueStyle={s.dimVal} />
             )}
-            {event.shodan_hostnames?.length > 0 && (
+            {event.shodan_banners?.length > 0 && (
+              <Row label="SOFTWARE" value={event.shodan_banners.slice(0, 3).join(' · ')} valueStyle={{ color: '#38bdf8', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' }} />
+            )}
+            {event.shodan_http_titles?.length > 0 && (
+              <Row label="HTTP TITLE" value={event.shodan_http_titles[0]} valueStyle={{ color: '#a78bfa', fontSize: '10px', textAlign: 'right', wordBreak: 'break-all' }} />
+            )}
+            {event.shodan_ssl_cns?.length > 0 && (
+              <Row label="SSL CN" value={event.shodan_ssl_cns[0]} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_domains?.length > 0 && (
+              <Row label="DOMAINS" value={event.shodan_domains.slice(0, 3).join(', ')} valueStyle={s.dimVal} />
+            )}
+            {event.shodan_hostnames?.length > 0 && !event.shodan_domains?.length && (
               <Row label="HOSTNAME" value={event.shodan_hostnames[0]} valueStyle={s.dimVal} />
             )}
             {event.shodan_tags?.length > 0 && (
