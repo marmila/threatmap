@@ -91,7 +91,7 @@ def check_shodan(ip: str) -> dict:
                 data = {
                     "ports": sorted(d.get("ports", [])),
                     "tags": d.get("tags", []),
-                    "vulns": sorted(d.get("vulns", {}).keys()),
+                    "vulns": sorted(d["vulns"].keys() if isinstance(d.get("vulns"), dict) else d.get("vulns") or []),
                     "org": d.get("org"),
                     "isp": d.get("isp"),
                     "asn": d.get("asn"),
