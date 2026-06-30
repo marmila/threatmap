@@ -31,7 +31,7 @@ def is_known_threat(ip: str) -> tuple[bool, str]:
     return (True, src) if src else (False, "")
 
 
-def check_abuseipdb(ip: str) -> tuple[bool, dict]:
+async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
     """Returns (is_threat, data dict). Caches results per IP for 24h.
 
     data keys: score, total_reports, distinct_users, last_reported, isp, usage_type, is_tor
@@ -44,8 +44,8 @@ def check_abuseipdb(ip: str) -> tuple[bool, dict]:
         if now - checked_at < _ABUSE_TTL:
             return data.get("score", 0) >= 50, data
     try:
-        with httpx.Client(timeout=5) as client:
-            r = client.get(
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
                 f"{ABUSEIPDB_BASE}/check",
                 headers={"Key": ABUSEIPDB_API_KEY, "Accept": "application/json"},
                 params={"ipAddress": ip, "maxAgeInDays": 90},
@@ -68,7 +68,7 @@ def check_abuseipdb(ip: str) -> tuple[bool, dict]:
     return False, {}
 
 
-def check_shodan(ip: str) -> dict:
+async def check_shodan(ip: str) -> dict:
     """Returns Shodan host data dict. Caches per IP for 7 days to conserve credits.
 
     data keys: ports, tags, vulns, org, isp, asn, hostnames, os, last_update
@@ -81,8 +81,8 @@ def check_shodan(ip: str) -> dict:
         if now - checked_at < _SHODAN_TTL:
             return data
     try:
-        with httpx.Client(timeout=10) as client:
-            r = client.get(
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
                 f"{SHODAN_BASE}/shodan/host/{ip}",
                 params={"key": SHODAN_API_KEY},
             )

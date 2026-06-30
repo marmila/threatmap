@@ -88,6 +88,8 @@ threatmap/
 | `SHODAN_API_KEY` | - | Shodan Membership API key - per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
+| `ENRICHMENT_WORKERS` | `8` | Number of concurrent async workers enriching events (AbuseIPDB/Shodan/Mongo lookups run in parallel instead of blocking the Kafka consumer one event at a time) |
+| `ENRICHMENT_QUEUE_MAXSIZE` | `500` | Max queued raw events awaiting enrichment; oldest is dropped if full to keep the feed live rather than backlogged |
 
 ---
 

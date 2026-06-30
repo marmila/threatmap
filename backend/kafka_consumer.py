@@ -21,6 +21,8 @@ KAFKA_USERNAME = os.getenv("KAFKA_USERNAME", "")
 KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD", "")
 HOME_LAT = float(os.getenv("HOME_LAT", "45.4654"))
 HOME_LON = float(os.getenv("HOME_LON", "9.1859"))
+ENRICHMENT_WORKERS = int(os.getenv("ENRICHMENT_WORKERS", "8"))
+ENRICHMENT_QUEUE_MAXSIZE = int(os.getenv("ENRICHMENT_QUEUE_MAXSIZE", "500"))
 
 _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
 
@@ -99,15 +101,6 @@ async def _db_check_ip(ip: str, protocol: str) -> tuple[int, bool]:
     return prev_count, len(other_protocols) > 0
 
 
-def _get_ip_history(ip: str, protocol: str, loop: asyncio.AbstractEventLoop) -> tuple[int, bool]:
-    try:
-        return asyncio.run_coroutine_threadsafe(
-            _db_check_ip(ip, protocol), loop
-        ).result(timeout=2.0)
-    except Exception:
-        return 0, False
-
-
 def _check_velocity(ip: str) -> bool:
     now = time.time()
     cutoff = now - 60.0
@@ -136,10 +129,29 @@ _SKIP_EVENT_TYPES = {
 
 async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _consume_loop, broadcast, loop)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=ENRICHMENT_QUEUE_MAXSIZE)
+
+    for _ in range(ENRICHMENT_WORKERS):
+        asyncio.create_task(_enrichment_worker(queue, broadcast))
+
+    await loop.run_in_executor(None, _consume_loop, queue, loop)
 
 
-def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
+def _enqueue(loop: asyncio.AbstractEventLoop, queue: asyncio.Queue, raw: dict):
+    def _put():
+        try:
+            queue.put_nowait(raw)
+        except asyncio.QueueFull:
+            logger.warning("Enrichment queue full, dropping oldest event")
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            queue.put_nowait(raw)
+    loop.call_soon_threadsafe(_put)
+
+
+def _consume_loop(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
     from kafka import KafkaConsumer
 
     consumer_kwargs = dict(
@@ -163,19 +175,30 @@ def _consume_loop(broadcast: Callable, loop: asyncio.AbstractEventLoop):
             consumer = KafkaConsumer(KAFKA_TOPIC, **consumer_kwargs)
             logger.info(f"Kafka consumer connected to {KAFKA_BOOTSTRAP}, topic={KAFKA_TOPIC}")
             for msg in consumer:
-                event = _enrich(msg.value, loop)
-                if event:
-                    asyncio.run_coroutine_threadsafe(report_to_abuseipdb(event["src_ip"], event["event_type"]), loop)
-                    asyncio.run_coroutine_threadsafe(broadcast(event), loop)
-                    asyncio.run_coroutine_threadsafe(_persist(event), loop)
+                _enqueue(loop, queue, msg.value)
         except Exception as e:
             logger.error(f"Kafka consumer failed: {e}, retrying in 10s")
             time.sleep(10)
 
 
-def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
+async def _enrichment_worker(queue: asyncio.Queue, broadcast: Callable):
+    while True:
+        raw = await queue.get()
+        try:
+            event = await _enrich(raw)
+            if event:
+                asyncio.create_task(report_to_abuseipdb(event["src_ip"], event["event_type"]))
+                await broadcast(event)
+                await _persist(event)
+        except Exception as e:
+            logger.warning(f"Enrichment failed: {e}")
+        finally:
+            queue.task_done()
+
+
+async def _enrich(raw: dict) -> dict | None:
     if "logtype" in raw:
-        return _enrich_opencanary(raw, loop)
+        return await _enrich_opencanary(raw)
 
     src_ip = raw.get("src_ip")
     if not src_ip:
@@ -190,9 +213,11 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
 
     protocol = raw.get("protocol", "ssh")
     otx_threat, threat_source = is_known_threat(src_ip)
-    abuse_threat, abuse_data = check_abuseipdb(src_ip)
-    shodan_data = check_shodan(src_ip)
-    prev_count, is_multi = _get_ip_history(src_ip, protocol, loop)
+    (abuse_threat, abuse_data), shodan_data, (prev_count, is_multi) = await asyncio.gather(
+        check_abuseipdb(src_ip),
+        check_shodan(src_ip),
+        _db_check_ip(src_ip, protocol),
+    )
     is_hot = _check_velocity(src_ip)
 
     return {
@@ -241,7 +266,7 @@ def _enrich(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
     }
 
 
-def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
+async def _enrich_opencanary(raw: dict) -> dict | None:
     src_ip = raw.get("src_host", "")
     if not src_ip:
         return None
@@ -266,9 +291,11 @@ def _enrich_opencanary(raw: dict, loop: asyncio.AbstractEventLoop) -> dict | Non
         return None
 
     otx_threat, threat_source = is_known_threat(src_ip)
-    abuse_threat, abuse_data = check_abuseipdb(src_ip)
-    shodan_data = check_shodan(src_ip)
-    prev_count, is_multi = _get_ip_history(src_ip, protocol, loop)
+    (abuse_threat, abuse_data), shodan_data, (prev_count, is_multi) = await asyncio.gather(
+        check_abuseipdb(src_ip),
+        check_shodan(src_ip),
+        _db_check_ip(src_ip, protocol),
+    )
     is_hot = _check_velocity(src_ip)
 
     return {
