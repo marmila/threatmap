@@ -35,4 +35,8 @@ async def ensure_indexes():
     await col.create_index([("event_type", 1)])
     # TTL: drop events older than 90 days (_ts is a BSON Date set at insert time)
     await col.create_index([("_ts", 1)], expireAfterSeconds=90 * 24 * 3600)
+    # ip_cache collection: AbuseIPDB + Shodan results persisted across restarts
+    cache = get_db().ip_cache
+    await cache.create_index([("ip", 1)], unique=True)
+    await cache.create_index([("expires_at", 1)], expireAfterSeconds=0)
     logger.info("MongoDB indexes ensured")

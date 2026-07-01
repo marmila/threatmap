@@ -5,6 +5,8 @@ import time
 import logging
 from datetime import datetime, timedelta
 
+from db import get_db
+
 logger = logging.getLogger(__name__)
 
 OTX_API_KEY = os.getenv("OTX_API_KEY", "")
@@ -14,7 +16,7 @@ ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "")
 SHODAN_BASE = "https://api.shodan.io"
 
-_threat_ips: dict[str, str] = {}                   # ip -> source name (OTX pulse / "Feodo Tracker" / "AbuseIPDB Blacklist")
+_threat_ips: dict[str, str] = {}
 _abuse_cache: dict[str, tuple[dict, float]] = {}   # ip -> (data, checked_at_epoch)
 _shodan_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
 _reported_cache: dict[str, float] = {}             # ip -> last_reported_at
@@ -32,17 +34,36 @@ def is_known_threat(ip: str) -> tuple[bool, str]:
 
 
 async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
-    """Returns (is_threat, data dict). Caches results per IP for 24h.
+    """Returns (is_threat, data dict). Two-level cache: in-memory L1 + MongoDB L2.
 
+    L1 resets on restart; L2 persists across restarts/deploys, preventing quota burn.
     data keys: score, total_reports, distinct_users, last_reported, isp, usage_type, is_tor
     """
     if not ABUSEIPDB_API_KEY:
         return False, {}
     now = time.time()
+
+    # L1: in-memory — avoids DB round-trip for IPs seen in this session
     if ip in _abuse_cache:
         data, checked_at = _abuse_cache[ip]
         if now - checked_at < _ABUSE_TTL:
             return data.get("score", 0) >= 50, data
+
+    # L2: MongoDB — survives pod restarts and deploys
+    try:
+        doc = await get_db().ip_cache.find_one(
+            {"ip": ip}, {"abuse_data": 1, "abuse_cached_at": 1}
+        )
+        if doc and doc.get("abuse_cached_at"):
+            age = (datetime.utcnow() - doc["abuse_cached_at"]).total_seconds()
+            if age < _ABUSE_TTL:
+                data = doc["abuse_data"]
+                _abuse_cache[ip] = (data, now)
+                return data.get("score", 0) >= 50, data
+    except Exception as e:
+        logger.warning(f"ip_cache read failed for {ip}: {e}")
+
+    # Cache miss — call AbuseIPDB API
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(
@@ -62,6 +83,18 @@ async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
                     "is_tor": d.get("isTor", False),
                 }
                 _abuse_cache[ip] = (data, now)
+                try:
+                    await get_db().ip_cache.update_one(
+                        {"ip": ip},
+                        {"$set": {
+                            "abuse_data": data,
+                            "abuse_cached_at": datetime.utcnow(),
+                            "expires_at": datetime.utcnow() + timedelta(days=7),
+                        }},
+                        upsert=True,
+                    )
+                except Exception as e:
+                    logger.warning(f"ip_cache write failed for {ip}: {e}")
                 return data["score"] >= 50, data
     except Exception as e:
         logger.warning(f"AbuseIPDB check failed for {ip}: {e}")
@@ -69,17 +102,35 @@ async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
 
 
 async def check_shodan(ip: str) -> dict:
-    """Returns Shodan host data dict. Caches per IP for 7 days to conserve credits.
+    """Returns Shodan host data dict. Two-level cache: in-memory L1 + MongoDB L2.
 
     data keys: ports, tags, vulns, org, isp, asn, hostnames, os, last_update
     """
     if not SHODAN_API_KEY:
         return {}
     now = time.time()
+
+    # L1: in-memory
     if ip in _shodan_cache:
         data, checked_at = _shodan_cache[ip]
         if now - checked_at < _SHODAN_TTL:
             return data
+
+    # L2: MongoDB
+    try:
+        doc = await get_db().ip_cache.find_one(
+            {"ip": ip}, {"shodan_data": 1, "shodan_cached_at": 1}
+        )
+        if doc and doc.get("shodan_cached_at"):
+            age = (datetime.utcnow() - doc["shodan_cached_at"]).total_seconds()
+            if age < _SHODAN_TTL:
+                data = doc["shodan_data"]
+                _shodan_cache[ip] = (data, now)
+                return data
+    except Exception as e:
+        logger.warning(f"ip_cache read failed for {ip}: {e}")
+
+    # Cache miss — call Shodan API
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(
@@ -89,9 +140,7 @@ async def check_shodan(ip: str) -> dict:
             if r.status_code == 200:
                 d = r.json()
                 services = d.get("data") or []
-                banners = []
-                http_titles = []
-                ssl_cns = []
+                banners, http_titles, ssl_cns = [], [], []
                 for svc in services:
                     product = svc.get("product")
                     version = svc.get("version")
@@ -120,11 +169,25 @@ async def check_shodan(ip: str) -> dict:
                     "http_titles": http_titles[:3],
                     "ssl_cns": ssl_cns[:3],
                 }
-                _shodan_cache[ip] = (data, now)
-                return data
             elif r.status_code == 404:
-                # IP not in Shodan — cache empty result to avoid burning credits on re-check
-                _shodan_cache[ip] = ({}, now)
+                data = {}
+            else:
+                return {}
+
+            _shodan_cache[ip] = (data, now)
+            try:
+                await get_db().ip_cache.update_one(
+                    {"ip": ip},
+                    {"$set": {
+                        "shodan_data": data,
+                        "shodan_cached_at": datetime.utcnow(),
+                        "expires_at": datetime.utcnow() + timedelta(days=7),
+                    }},
+                    upsert=True,
+                )
+            except Exception as e:
+                logger.warning(f"ip_cache write failed for {ip}: {e}")
+            return data
     except Exception as e:
         logger.warning(f"Shodan check failed for {ip}: {e}")
     return {}
@@ -137,7 +200,7 @@ async def report_to_abuseipdb(ip: str, event_type: str) -> None:
     now = time.time()
     if ip in _reported_cache and now - _reported_cache[ip] < _REPORT_TTL:
         return
-    _reported_cache[ip] = now  # mark before the call to prevent race duplicates
+    _reported_cache[ip] = now
 
     if event_type == "cowrie.command.input":
         categories, comment = "22", "SSH intrusion — commands executed in Cowrie honeypot"
@@ -162,7 +225,6 @@ async def report_to_abuseipdb(ip: str, event_type: str) -> None:
 
 
 async def start_threat_poller():
-    # Pull blacklist immediately at startup, then every 6 hours
     await _refresh_blacklist()
     cycles = 0
     while True:
@@ -171,7 +233,7 @@ async def start_threat_poller():
         except Exception as e:
             logger.error(f"Threat poller error: {e}")
         cycles += 1
-        if cycles % 72 == 0:  # 72 × 5 min = 6 hours
+        if cycles % 72 == 0:
             try:
                 await _refresh_blacklist()
             except Exception as e:
@@ -216,7 +278,6 @@ async def _refresh():
 
 
 async def _refresh_blacklist():
-    """Download AbuseIPDB high-confidence blacklist and merge into threat set."""
     if not ABUSEIPDB_API_KEY:
         return
     try:
