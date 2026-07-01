@@ -5,7 +5,7 @@ import { useWebSocket } from './hooks/useWebSocket.js'
 import { useWindowSize } from './hooks/useWindowSize.js'
 
 const MAX_ARCS = 300
-const ARC_TTL_MS = 8000
+const ARC_TTL_MS = 60000
 
 const LEGEND_ITEMS = [
   { color: '#ef4444', label: 'Login success / SSH' },
