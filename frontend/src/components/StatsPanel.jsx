@@ -653,7 +653,7 @@ export default function StatsPanel({
               </div>
             )}
 
-            <HourlyChart data={hourlyData} />
+            <HourlyChart data={hourlyData} dailyData={dailyData} />
 
             {honeypotBreakdown.length > 0 && (
               <div style={s.section}>

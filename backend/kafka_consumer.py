@@ -347,7 +347,7 @@ async def _enrich_opencanary(raw: dict) -> dict | None:
 async def _persist(event: dict):
     try:
         db = get_db()
-        await db.events.insert_one({**event})
+        await db.events.insert_one({**event, "_ts": datetime.now(timezone.utc)})
     except Exception as e:
         logger.warning(f"MongoDB write failed: {e}")
 

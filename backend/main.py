@@ -1,12 +1,13 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import close_db, get_db
+from db import close_db, get_db, ensure_indexes
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller
 
@@ -14,6 +15,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _clients: set[WebSocket] = set()
+
+_stats_cache: dict = {}
+_STATS_TTL = 60.0
+
+
+def _cache_get(key: str):
+    entry = _stats_cache.get(key)
+    if entry and time.monotonic() < entry[1]:
+        return entry[0]
+    return None
+
+
+def _cache_set(key: str, data):
+    _stats_cache[key] = (data, time.monotonic() + _STATS_TTL)
 
 
 async def _broadcast(event: dict):
@@ -28,6 +43,7 @@ async def _broadcast(event: dict):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await ensure_indexes()
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -59,13 +75,15 @@ async def ws_endpoint(websocket: WebSocket):
 async def recent_events(limit: int = 200):
     db = get_db()
     events = await db.events.find(
-        {}, {"_id": 0}
+        {}, {"_id": 0, "_ts": 0}
     ).sort("timestamp", -1).limit(limit).to_list(limit)
     return events
 
 
 @app.get("/api/stats")
 async def stats():
+    if (cached := _cache_get("stats")) is not None:
+        return cached
     db = get_db()
     total = await db.events.count_documents({})
 
@@ -133,7 +151,7 @@ async def stats():
         db.events.aggregate(unique_ip_pipeline).to_list(1),
     )
     unique_ips = unique_ip_result[0]["count"] if unique_ip_result else 0
-    return {
+    result = {
         "total": total,
         "unique_ips": unique_ips,
         "top_countries": top_countries,
@@ -142,6 +160,8 @@ async def stats():
         "honeypot_breakdown": honeypot_breakdown,
         "event_type_breakdown": event_type_breakdown,
     }
+    _cache_set("stats", result)
+    return result
 
 
 @app.get("/api/ip/{ip}/stats")
@@ -185,6 +205,8 @@ async def ip_stats(ip: str):
 
 @app.get("/api/stats/credentials")
 async def credentials_stats():
+    if (cached := _cache_get("credentials")) is not None:
+        return cached
     db = get_db()
     username_pipeline = [
         {"$match": {"username": {"$nin": [None, ""]}}},
@@ -204,11 +226,15 @@ async def credentials_stats():
         db.events.aggregate(username_pipeline).to_list(10),
         db.events.aggregate(password_pipeline).to_list(10),
     )
-    return {"top_usernames": top_usernames, "top_passwords": top_passwords}
+    result = {"top_usernames": top_usernames, "top_passwords": top_passwords}
+    _cache_set("credentials", result)
+    return result
 
 
 @app.get("/api/stats/commands")
 async def commands_stats():
+    if (cached := _cache_get("commands")) is not None:
+        return cached
     db = get_db()
     pipeline = [
         {"$match": {"event_type": "cowrie.command.input", "command": {"$nin": [None, ""]}}},
@@ -217,12 +243,15 @@ async def commands_stats():
         {"$limit": 10},
         {"$project": {"command": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(10)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(10)
+    _cache_set("commands", result)
+    return result
 
 
 @app.get("/api/stats/redis-commands")
 async def redis_commands_stats():
+    if (cached := _cache_get("redis-commands")) is not None:
+        return cached
     db = get_db()
     pipeline = [
         {"$match": {"event_type": "opencanary.redis.command", "command": {"$nin": [None, ""]}}},
@@ -231,12 +260,15 @@ async def redis_commands_stats():
         {"$limit": 15},
         {"$project": {"command": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(15)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(15)
+    _cache_set("redis-commands", result)
+    return result
 
 
 @app.get("/api/stats/http-paths")
 async def http_paths_stats():
+    if (cached := _cache_get("http-paths")) is not None:
+        return cached
     db = get_db()
     pipeline = [
         {"$match": {"event_type": "opencanary.http.request", "path": {"$nin": [None, ""]}}},
@@ -245,12 +277,15 @@ async def http_paths_stats():
         {"$limit": 15},
         {"$project": {"path": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(15)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(15)
+    _cache_set("http-paths", result)
+    return result
 
 
 @app.get("/api/stats/daily")
 async def daily_stats():
+    if (cached := _cache_get("daily")) is not None:
+        return cached
     db = get_db()
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     pipeline = [
@@ -264,12 +299,15 @@ async def daily_stats():
         {"$sort": {"_id": 1}},
         {"$project": {"day": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(7)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(7)
+    _cache_set("daily", result)
+    return result
 
 
 @app.get("/api/stats/orgs")
 async def orgs_stats():
+    if (cached := _cache_get("orgs")) is not None:
+        return cached
     db = get_db()
     pipeline = [
         {"$project": {"org": {"$ifNull": ["$shodan_org", "$abuse_isp"]}}},
@@ -279,12 +317,15 @@ async def orgs_stats():
         {"$limit": 10},
         {"$project": {"org": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(10)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(10)
+    _cache_set("orgs", result)
+    return result
 
 
 @app.get("/api/stats/hourly")
 async def hourly_stats():
+    if (cached := _cache_get("hourly")) is not None:
+        return cached
     db = get_db()
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     pipeline = [
@@ -298,12 +339,15 @@ async def hourly_stats():
         {"$sort": {"_id": 1}},
         {"$project": {"hour": "$_id", "count": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(24)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(24)
+    _cache_set("hourly", result)
+    return result
 
 
 @app.get("/api/stats/vulns")
 async def vulns_stats():
+    if (cached := _cache_get("vulns")) is not None:
+        return cached
     db = get_db()
     pipeline = [
         {"$match": {"vuln_hint": {"$nin": [None, ""]}, "vuln_hint.label": {"$nin": [None, ""]}}},
@@ -317,8 +361,9 @@ async def vulns_stats():
         {"$limit": 10},
         {"$project": {"label": "$_id", "count": 1, "cve": 1, "tier": 1, "_id": 0}},
     ]
-    results = await db.events.aggregate(pipeline).to_list(10)
-    return results
+    result = await db.events.aggregate(pipeline).to_list(10)
+    _cache_set("vulns", result)
+    return result
 
 
 @app.get("/healthz")

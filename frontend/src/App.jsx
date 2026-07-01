@@ -137,14 +137,42 @@ export default function App() {
       } catch {}
     }
     load()
-    const hourlyRefresh = setInterval(async () => {
+    const statsRefresh = setInterval(async () => {
       try {
-        const r = await fetch('/api/stats/hourly')
-        setHourlyData(await r.json())
+        const [stRes, hrRes, credRes, cmdRes, pathsRes, redisRes, dailyRes, orgsRes, vulnsRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/stats/hourly'),
+          fetch('/api/stats/credentials'),
+          fetch('/api/stats/commands'),
+          fetch('/api/stats/http-paths'),
+          fetch('/api/stats/redis-commands'),
+          fetch('/api/stats/daily'),
+          fetch('/api/stats/orgs'),
+          fetch('/api/stats/vulns'),
+        ])
+        const [stats, hourly, creds, cmds, paths, redisCmds, daily, orgs, vulns] = await Promise.all([
+          stRes.json(), hrRes.json(), credRes.json(), cmdRes.json(),
+          pathsRes.json(), redisRes.json(), dailyRes.json(), orgsRes.json(), vulnsRes.json(),
+        ])
+        setTotal(stats.total || 0)
+        setTopCountries(stats.top_countries || [])
+        setTopIps(stats.top_ips || [])
+        setProtocolBreakdown(stats.protocol_breakdown || [])
+        setHoneypotBreakdown(stats.honeypot_breakdown || [])
+        setEventTypeBreakdown(stats.event_type_breakdown || [])
+        setUniqueIps(stats.unique_ips || 0)
+        setHourlyData(hourly || [])
+        setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
+        setCommandsData(cmds || [])
+        setHttpPathsData(paths || [])
+        setRedisCommandsData(redisCmds || [])
+        setDailyData(daily || [])
+        setOrgsData(orgs || [])
+        setVulnsData(vulns || [])
       } catch {}
-    }, 600000)
+    }, 300000)
     return () => {
-      clearInterval(hourlyRefresh)
+      clearInterval(statsRefresh)
       arcTimers.current.forEach(clearTimeout)
     }
   }, [])
