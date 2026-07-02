@@ -20,9 +20,9 @@ _threat_ips: dict[str, str] = {}
 _abuse_cache: dict[str, tuple[dict, float]] = {}   # ip -> (data, checked_at_epoch)
 _shodan_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
 _reported_cache: dict[str, float] = {}             # ip -> last_reported_at
-_ABUSE_TTL = 86400    # 24 hours per-IP AbuseIPDB cache
-_SHODAN_TTL = 604800  # 7 days — Shodan membership = 100 credits/month, conserve them
-_REPORT_TTL = 900     # 15 min minimum between reports for same IP (AbuseIPDB TOS)
+_ABUSE_TTL = 86400      # 24 hours per-IP AbuseIPDB cache
+_SHODAN_TTL = 2592000  # 30 days — Shodan membership = 100 credits/month; 42 IPs/day × 30d fits budget
+_REPORT_TTL = 900      # 15 min minimum between reports for same IP (AbuseIPDB TOS)
 
 _REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
@@ -89,7 +89,7 @@ async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
                         {"$set": {
                             "abuse_data": data,
                             "abuse_cached_at": datetime.utcnow(),
-                            "expires_at": datetime.utcnow() + timedelta(days=7),
+                            "expires_at": datetime.utcnow() + timedelta(days=30),
                         }},
                         upsert=True,
                     )
@@ -277,9 +277,24 @@ async def _refresh():
     logger.info(f"Threat intel refreshed: {len(_threat_ips)} IPs")
 
 
+_BLACKLIST_INTERVAL = 8 * 3600  # 8 hours minimum between fetches (free plan: 5/day hard limit)
+
+
 async def _refresh_blacklist():
     if not ABUSEIPDB_API_KEY:
         return
+
+    # Check last fetch time in MongoDB — prevents extra calls on pod restarts
+    try:
+        meta = await get_db().meta.find_one({"_id": "blacklist_last_fetch"})
+        if meta:
+            age = (datetime.utcnow() - meta["fetched_at"]).total_seconds()
+            if age < _BLACKLIST_INTERVAL:
+                logger.info(f"Skipping blacklist refresh, last fetch was {age / 3600:.1f}h ago")
+                return
+    except Exception as e:
+        logger.warning(f"meta read failed: {e}")
+
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.get(
@@ -292,6 +307,14 @@ async def _refresh_blacklist():
                 for ip in new_ips:
                     _threat_ips.setdefault(ip, "AbuseIPDB Blacklist")
                 logger.info(f"AbuseIPDB blacklist: {len(new_ips)} IPs merged into threat set")
+                try:
+                    await get_db().meta.update_one(
+                        {"_id": "blacklist_last_fetch"},
+                        {"$set": {"fetched_at": datetime.utcnow()}},
+                        upsert=True,
+                    )
+                except Exception as e:
+                    logger.warning(f"meta write failed: {e}")
             else:
                 logger.warning(f"AbuseIPDB blacklist HTTP {r.status_code}")
     except Exception as e:
