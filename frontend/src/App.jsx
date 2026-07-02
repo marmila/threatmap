@@ -190,7 +190,7 @@ export default function App() {
       <button
         onClick={() => setPage('analytics')}
         style={{
-          position: 'fixed', top: '24px', right: '24px', zIndex: 10,
+          position: 'fixed', top: '24px', left: '24px', zIndex: 11,
           background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
           border: '1px solid #1e2535', color: '#4ade80',
           fontFamily: "'Courier New', monospace", fontSize: '10px', letterSpacing: '2px',

@@ -178,6 +178,12 @@ export default function AnalyticsPage({ onBack }) {
     setLoading(false)
   }
 
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'auto'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   useEffect(() => { load() }, [])
 
   const col2 = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }
