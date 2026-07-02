@@ -366,6 +366,175 @@ async def vulns_stats():
     return result
 
 
+@app.get("/api/analytics/overview")
+async def analytics_overview():
+    if (cached := _cache_get("analytics_overview")) is not None:
+        return cached
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    (
+        total_events,
+        events_today,
+        unique_ip_r,
+        abuse_today,
+        shodan_today,
+        shodan_total,
+        threat_count,
+        total_checked,
+    ) = await asyncio.gather(
+        db.events.count_documents({}),
+        db.events.count_documents({"_ts": {"$gte": today_start}}),
+        db.events.aggregate([{"$group": {"_id": "$src_ip"}}, {"$count": "count"}]).to_list(1),
+        db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_start}}),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_start}}),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
+        db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
+        db.ip_cache.count_documents({"abuse_data": {"$exists": True}}),
+    )
+    unique_ips = unique_ip_r[0]["count"] if unique_ip_r else 0
+    threat_rate = round(threat_count / total_checked * 100, 1) if total_checked > 0 else 0.0
+    result = {
+        "total_events": total_events,
+        "events_today": events_today,
+        "unique_ips": unique_ips,
+        "abuse_today": abuse_today,
+        "shodan_today": shodan_today,
+        "shodan_total": shodan_total,
+        "threat_rate": threat_rate,
+        "total_checked": total_checked,
+    }
+    _stats_cache["analytics_overview"] = (result, time.monotonic() + 300)
+    return result
+
+
+@app.get("/api/analytics/timeline")
+async def analytics_timeline(days: int = 7):
+    cache_key = f"analytics_timeline_{days}"
+    if (cached := _cache_get(cache_key)) is not None:
+        return cached
+    db = get_db()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    pipeline = [
+        {"$match": {"_ts": {"$gte": since}}},
+        {"$group": {
+            "_id": {"dow": {"$isoDayOfWeek": "$_ts"}, "hour": {"$hour": "$_ts"}},
+            "count": {"$sum": 1},
+        }},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(days * 24)
+    data = [{"dow": r["_id"]["dow"], "hour": r["_id"]["hour"], "count": r["count"]} for r in results]
+    _stats_cache[cache_key] = (data, time.monotonic() + 300)
+    return data
+
+
+@app.get("/api/analytics/intelligence")
+async def analytics_intelligence():
+    if (cached := _cache_get("analytics_intelligence")) is not None:
+        return cached
+    db = get_db()
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+
+    score_dist_pipeline = [
+        {"$match": {"abuse_data": {"$exists": True}}},
+        {"$bucket": {
+            "groupBy": "$abuse_data.score",
+            "boundaries": [0, 26, 51, 76, 101],
+            "default": "other",
+            "output": {"count": {"$sum": 1}},
+        }},
+    ]
+    cve_pipeline = [
+        {"$unwind": "$shodan_data.vulns"},
+        {"$group": {"_id": "$shodan_data.vulns", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]
+    ports_pipeline = [
+        {"$unwind": "$shodan_data.ports"},
+        {"$group": {"_id": "$shodan_data.ports", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 15},
+    ]
+    tags_pipeline = [
+        {"$unwind": "$shodan_data.tags"},
+        {"$group": {"_id": "$shodan_data.tags", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]
+    abuse_daily_pipeline = [
+        {"$match": {"abuse_cached_at": {"$gte": seven_days_ago}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$abuse_cached_at"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+        {"$limit": 7},
+    ]
+    shodan_daily_pipeline = [
+        {"$match": {"shodan_cached_at": {"$gte": seven_days_ago}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$shodan_cached_at"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+        {"$limit": 7},
+    ]
+    top_orgs_pipeline = [
+        {"$match": {"shodan_org": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": "$shodan_org",
+            "events": {"$sum": 1},
+            "unique_ips": {"$addToSet": "$src_ip"},
+        }},
+        {"$project": {"org": "$_id", "events": 1, "unique_ips": {"$size": "$unique_ips"}, "_id": 0}},
+        {"$sort": {"events": -1}},
+        {"$limit": 15},
+    ]
+
+    (
+        score_dist,
+        top_cves,
+        top_ports,
+        top_tags,
+        abuse_daily,
+        shodan_daily,
+        shodan_checked,
+        shodan_with_data,
+        top_orgs,
+    ) = await asyncio.gather(
+        db.ip_cache.aggregate(score_dist_pipeline).to_list(5),
+        db.ip_cache.aggregate(cve_pipeline).to_list(10),
+        db.ip_cache.aggregate(ports_pipeline).to_list(15),
+        db.ip_cache.aggregate(tags_pipeline).to_list(10),
+        db.ip_cache.aggregate(abuse_daily_pipeline).to_list(7),
+        db.ip_cache.aggregate(shodan_daily_pipeline).to_list(7),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}, "shodan_data": {"$ne": {}}}),
+        db.events.aggregate(top_orgs_pipeline).to_list(15),
+    )
+
+    bucket_labels = {0: "Clean (0–25)", 26: "Suspicious (26–50)", 51: "Malicious (51–75)", 76: "High Risk (76–100)"}
+    score_formatted = sorted(
+        [{"label": bucket_labels.get(b["_id"], "other"), "count": b["count"], "boundary": b["_id"]}
+         for b in score_dist if isinstance(b["_id"], int)],
+        key=lambda x: x["boundary"],
+    )
+
+    result = {
+        "abuse_daily": [{"date": r["_id"], "count": r["count"]} for r in abuse_daily],
+        "shodan_daily": [{"date": r["_id"], "count": r["count"]} for r in shodan_daily],
+        "score_distribution": score_formatted,
+        "top_cves": [{"cve": r["_id"], "count": r["count"]} for r in top_cves],
+        "top_ports": [{"port": r["_id"], "count": r["count"]} for r in top_ports],
+        "top_tags": [{"tag": r["_id"], "count": r["count"]} for r in top_tags],
+        "shodan_coverage": {"has_data": shodan_with_data, "no_data": shodan_checked - shodan_with_data},
+        "top_orgs": top_orgs,
+    }
+    _stats_cache["analytics_intelligence"] = (result, time.monotonic() + 300)
+    return result
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}

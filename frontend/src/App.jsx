@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import GlobeMap from './components/GlobeMap.jsx'
 import StatsPanel from './components/StatsPanel.jsx'
+import AnalyticsPage from './components/AnalyticsPage.jsx'
 import { useWebSocket } from './hooks/useWebSocket.js'
 import { useWindowSize } from './hooks/useWindowSize.js'
 
@@ -41,6 +42,7 @@ function Legend() {
 
 export default function App() {
   const { isMobile } = useWindowSize()
+  const [page, setPage] = useState('globe')
   const [arcs, setArcs] = useState([])
   const [liveEvents, setLiveEvents] = useState([])
   const [total, setTotal] = useState(0)
@@ -177,10 +179,24 @@ export default function App() {
     }
   }, [])
 
+  if (page === 'analytics') {
+    return <AnalyticsPage onBack={() => setPage('globe')} />
+  }
+
   return (
     <>
       <GlobeMap arcs={arcs} />
       {!isMobile && <Legend />}
+      <button
+        onClick={() => setPage('analytics')}
+        style={{
+          position: 'fixed', top: '24px', right: '24px', zIndex: 10,
+          background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
+          border: '1px solid #1e2535', color: '#4ade80',
+          fontFamily: "'Courier New', monospace", fontSize: '10px', letterSpacing: '2px',
+          padding: '8px 14px', borderRadius: '4px', cursor: 'pointer',
+        }}
+      >ANALYTICS</button>
       <StatsPanel
         events={liveEvents}
         total={total}
