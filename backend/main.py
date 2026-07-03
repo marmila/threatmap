@@ -366,6 +366,68 @@ async def vulns_stats():
     return result
 
 
+@app.get("/api/analytics/ips")
+async def analytics_ips():
+    if (cached := _cache_get("analytics_ips")) is not None:
+        return cached
+    db = get_db()
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_naive = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    unique_today_pipeline = [
+        {"$match": {"_ts": {"$gte": today_start}}},
+        {"$group": {"_id": "$src_ip"}},
+        {"$count": "count"},
+    ]
+    new_today_pipeline = [
+        {"$group": {"_id": "$src_ip", "first_seen": {"$min": "$_ts"}}},
+        {"$match": {"first_seen": {"$gte": today_start}}},
+        {"$count": "count"},
+    ]
+    top_today_pipeline = [
+        {"$match": {"_ts": {"$gte": today_start}}},
+        {"$group": {
+            "_id": "$src_ip",
+            "count": {"$sum": 1},
+            "country": {"$first": "$src_country"},
+            "country_code": {"$first": "$src_country_code"},
+            "known_threat": {"$max": "$known_threat"},
+            "abuse_score": {"$max": "$abuse_score"},
+            "protocols": {"$addToSet": "$protocol"},
+            "org": {"$first": "$shodan_org"},
+            "isp": {"$first": "$abuse_isp"},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 25},
+        {"$project": {
+            "ip": "$_id", "count": 1, "country": 1, "country_code": 1,
+            "known_threat": 1, "abuse_score": 1, "protocols": 1,
+            "org": 1, "isp": 1, "_id": 0,
+        }},
+    ]
+
+    unique_r, new_r, top_today, abuse_today = await asyncio.gather(
+        db.events.aggregate(unique_today_pipeline).to_list(1),
+        db.events.aggregate(new_today_pipeline).to_list(1),
+        db.events.aggregate(top_today_pipeline).to_list(25),
+        db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_naive}}),
+    )
+
+    unique_ips_today = unique_r[0]["count"] if unique_r else 0
+    new_ips_today = new_r[0]["count"] if new_r else 0
+
+    result = {
+        "unique_ips_today": unique_ips_today,
+        "new_ips_today": new_ips_today,
+        "repeat_ips_today": unique_ips_today - new_ips_today,
+        "abuse_api_calls_today": abuse_today,
+        "cache_hits_today": max(0, unique_ips_today - abuse_today),
+        "top_ips_today": top_today,
+    }
+    _stats_cache["analytics_ips"] = (result, time.monotonic() + 300)
+    return result
+
+
 @app.get("/api/analytics/overview")
 async def analytics_overview():
     if (cached := _cache_get("analytics_overview")) is not None:

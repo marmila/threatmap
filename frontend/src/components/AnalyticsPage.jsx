@@ -151,26 +151,50 @@ function Empty({ msg = 'No data yet' }) {
   return <div style={{ fontSize: '11px', color: '#475569', padding: '12px 0' }}>{msg}</div>
 }
 
+const flag = (code) => {
+  if (!code || code.length !== 2) return ''
+  return [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('')
+}
+
+const PROTO_COLOR = {
+  ssh: '#fbbf24', http: '#a78bfa', ftp: '#22d3ee',
+  mysql: '#4ade80', redis: '#fb923c', telnet: '#f87171', unknown: '#475569',
+}
+
+function ProtoTag({ proto }) {
+  return (
+    <span style={{
+      background: '#1e2535', border: `1px solid ${PROTO_COLOR[proto] || '#475569'}`,
+      color: PROTO_COLOR[proto] || '#475569',
+      borderRadius: '3px', padding: '1px 5px', fontSize: '9px', letterSpacing: '1px',
+      marginRight: '3px', whiteSpace: 'nowrap',
+    }}>{proto?.toUpperCase()}</span>
+  )
+}
+
 export default function AnalyticsPage({ onBack }) {
   const { isMobile } = useWindowSize()
   const [overview, setOverview] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [intelligence, setIntelligence] = useState(null)
+  const [ips, setIps] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [ovRes, tlRes, intRes] = await Promise.all([
+      const [ovRes, tlRes, intRes, ipsRes] = await Promise.all([
         fetch('/api/analytics/overview'),
         fetch('/api/analytics/timeline?days=7'),
         fetch('/api/analytics/intelligence'),
+        fetch('/api/analytics/ips'),
       ])
-      const [ov, tl, int] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json()])
+      const [ov, tl, int, ip] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json()])
       setOverview(ov)
       setTimeline(tl)
       setIntelligence(int)
+      setIps(ip)
       setRefreshedAt(new Date())
     } catch (e) {
       console.error('Analytics load failed', e)
@@ -335,6 +359,84 @@ export default function AnalyticsPage({ onBack }) {
               )}
             </div>
           </div>
+
+          {/* ── IP analysis ── */}
+          <div style={SECTION}>IP ANALYSIS — TODAY</div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <StatCard label="UNIQUE IPs TODAY" value={ips?.unique_ips_today} color="#4ade80" />
+            <StatCard label="NEW IPs TODAY" value={ips?.new_ips_today} color="#f97316" sub="first time ever seen" />
+            <StatCard label="REPEAT IPs" value={ips?.repeat_ips_today} color="#94a3b8" sub="seen on previous days" />
+            <StatCard label="CACHE HITS" value={ips?.cache_hits_today} color="#22d3ee" sub="no API credit used" />
+          </div>
+
+          {ips && ips.unique_ips_today > 0 && (
+            <div style={{ ...CARD, marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>ABUSEIPDB CACHE HIT RATE TODAY</span>
+                <span style={{ fontSize: '11px', color: '#22d3ee' }}>
+                  {Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%
+                  <span style={{ color: '#475569', marginLeft: '8px' }}>
+                    ({ips.cache_hits_today} served from cache · {ips.abuse_api_calls_today} API calls)
+                  </span>
+                </span>
+              </div>
+              <div style={{ height: '8px', background: '#1e2535', borderRadius: '4px' }}>
+                <div style={{
+                  height: '100%', borderRadius: '4px', background: 'linear-gradient(90deg, #22d3ee, #4ade80)',
+                  width: `${Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%`,
+                }} />
+              </div>
+            </div>
+          )}
+
+          {ips?.top_ips_today?.length > 0 && (
+            <div style={CARD}>
+              <div style={{ fontSize: '10px', color: '#4ade80', letterSpacing: '2px', marginBottom: '16px' }}>TOP ATTACKERS TODAY</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'IP', 'COUNTRY', 'ORG / ISP', 'EVENTS', 'PROTOCOLS', 'ABUSE', 'THREAT'].map(h => (
+                        <th key={h} style={{
+                          textAlign: 'left', color: '#475569', fontSize: '9px',
+                          letterSpacing: '1px', paddingBottom: '12px', paddingRight: '16px', fontWeight: 'normal',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ips.top_ips_today.map((ip, i) => (
+                      <tr key={ip.ip} style={{ borderTop: '1px solid #1a2535' }}>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#2d3748', width: '28px' }}>{i + 1}</td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#e2e8f0', fontFamily: MONO, fontSize: '11px', whiteSpace: 'nowrap' }}>{ip.ip}</td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                          {flag(ip.country_code)} {ip.country}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#64748b', maxWidth: isMobile ? '80px' : '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ip.org || ip.isp || '—'}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#4ade80', fontWeight: 'bold' }}>{ip.count.toLocaleString()}</td>
+                        <td style={{ padding: '8px 16px 8px 0', whiteSpace: 'nowrap' }}>
+                          {(ip.protocols || []).sort().map(p => <ProtoTag key={p} proto={p} />)}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0' }}>
+                          <span style={{ color: ip.abuse_score >= 75 ? '#ef4444' : ip.abuse_score >= 50 ? '#f97316' : ip.abuse_score >= 25 ? '#eab308' : '#22c55e', fontWeight: 'bold' }}>
+                            {ip.abuse_score ?? '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 0 8px 0' }}>
+                          {ip.known_threat
+                            ? <span style={{ color: '#ef4444', fontSize: '10px', letterSpacing: '1px' }}>● THREAT</span>
+                            : <span style={{ color: '#1e2535', fontSize: '10px' }}>—</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* ── Shodan intelligence ── */}
           <div style={SECTION}>SHODAN INTELLIGENCE</div>
