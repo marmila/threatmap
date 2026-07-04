@@ -127,12 +127,22 @@ _SKIP_EVENT_TYPES = {
 }
 
 
+async def _cleanup_velocity_cache():
+    while True:
+        await asyncio.sleep(300)
+        cutoff = time.time() - 60.0
+        stale = [ip for ip, ts in list(_ip_timestamps.items()) if not any(t > cutoff for t in ts)]
+        for ip in stale:
+            _ip_timestamps.pop(ip, None)
+
+
 async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue = asyncio.Queue(maxsize=ENRICHMENT_QUEUE_MAXSIZE)
 
     for _ in range(ENRICHMENT_WORKERS):
         asyncio.create_task(_enrichment_worker(queue, broadcast))
+    asyncio.create_task(_cleanup_velocity_cache())
 
     await loop.run_in_executor(None, _consume_loop, queue, loop)
 

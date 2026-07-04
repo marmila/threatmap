@@ -435,6 +435,7 @@ async def analytics_overview():
     db = get_db()
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_naive = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     (
         total_events,
         events_today,
@@ -448,8 +449,8 @@ async def analytics_overview():
         db.events.count_documents({}),
         db.events.count_documents({"_ts": {"$gte": today_start}}),
         db.events.aggregate([{"$group": {"_id": "$src_ip"}}, {"$count": "count"}]).to_list(1),
-        db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_start}}),
-        db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_start}}),
+        db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_naive}}),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
         db.ip_cache.count_documents({"abuse_data": {"$exists": True}}),
