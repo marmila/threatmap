@@ -20,6 +20,8 @@ _threat_ips: dict[str, str] = {}
 _abuse_cache: dict[str, tuple[dict, float]] = {}   # ip -> (data, checked_at_epoch)
 _shodan_cache: dict[str, tuple[dict, float]] = {}  # ip -> (data, checked_at_epoch)
 _reported_cache: dict[str, float] = {}             # ip -> last_reported_at
+_abuse_inflight: dict[str, asyncio.Event] = {}     # ip -> event signaled when API call completes
+_shodan_inflight: dict[str, asyncio.Event] = {}
 _ABUSE_TTL = 86400      # 24 hours per-IP AbuseIPDB cache
 _SHODAN_TTL = 2592000  # 30 days — Shodan membership = 100 credits/month; 42 IPs/day × 30d fits budget
 _REPORT_TTL = 900      # 15 min minimum between reports for same IP (AbuseIPDB TOS)
@@ -36,74 +38,89 @@ def is_known_threat(ip: str) -> tuple[bool, str]:
 async def check_abuseipdb(ip: str) -> tuple[bool, dict]:
     """Returns (is_threat, data dict). Two-level cache: in-memory L1 + MongoDB L2.
 
-    L1 resets on restart; L2 persists across restarts/deploys, preventing quota burn.
+    In-flight deduplication prevents concurrent workers from racing on the same IP.
     data keys: score, total_reports, distinct_users, last_reported, isp, usage_type, is_tor
     """
     if not ABUSEIPDB_API_KEY:
         return False, {}
     now = time.time()
 
-    # L1: in-memory — avoids DB round-trip for IPs seen in this session
+    # L1: in-memory
     if ip in _abuse_cache:
         data, checked_at = _abuse_cache[ip]
         if now - checked_at < _ABUSE_TTL:
             return data.get("score", 0) >= 50, data
 
-    # L2: MongoDB — survives pod restarts and deploys
-    try:
-        doc = await get_db().ip_cache.find_one(
-            {"ip": ip}, {"abuse_data": 1, "abuse_cached_at": 1}
-        )
-        if doc and doc.get("abuse_cached_at"):
-            age = (datetime.utcnow() - doc["abuse_cached_at"]).total_seconds()
-            if age < _ABUSE_TTL:
-                data = doc["abuse_data"]
-                _abuse_cache[ip] = (data, now)
-                return data.get("score", 0) >= 50, data
-    except Exception as e:
-        logger.warning(f"ip_cache read failed for {ip}: {e}")
+    # In-flight dedup: if another worker is already fetching this IP, wait for it
+    if ip in _abuse_inflight:
+        await _abuse_inflight[ip].wait()
+        if ip in _abuse_cache:
+            data, _ = _abuse_cache[ip]
+            return data.get("score", 0) >= 50, data
+        return False, {}
 
-    # Cache miss — call AbuseIPDB API
+    event = asyncio.Event()
+    _abuse_inflight[ip] = event
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(
-                f"{ABUSEIPDB_BASE}/check",
-                headers={"Key": ABUSEIPDB_API_KEY, "Accept": "application/json"},
-                params={"ipAddress": ip, "maxAgeInDays": 90},
+        # L2: MongoDB — survives pod restarts and deploys
+        try:
+            doc = await get_db().ip_cache.find_one(
+                {"ip": ip}, {"abuse_data": 1, "abuse_cached_at": 1}
             )
-            if r.status_code == 200:
-                d = r.json()["data"]
-                data = {
-                    "score": d.get("abuseConfidenceScore", 0),
-                    "total_reports": d.get("totalReports", 0),
-                    "distinct_users": d.get("numDistinctUsers", 0),
-                    "last_reported": d.get("lastReportedAt"),
-                    "isp": d.get("isp"),
-                    "usage_type": d.get("usageType"),
-                    "is_tor": d.get("isTor", False),
-                }
-                _abuse_cache[ip] = (data, now)
-                try:
-                    await get_db().ip_cache.update_one(
-                        {"ip": ip},
-                        {"$set": {
-                            "abuse_data": data,
-                            "abuse_cached_at": datetime.utcnow(),
-                            "expires_at": datetime.utcnow() + timedelta(days=30),
-                        }},
-                        upsert=True,
-                    )
-                except Exception as e:
-                    logger.warning(f"ip_cache write failed for {ip}: {e}")
-                return data["score"] >= 50, data
-    except Exception as e:
-        logger.warning(f"AbuseIPDB check failed for {ip}: {e}")
-    return False, {}
+            if doc and doc.get("abuse_cached_at"):
+                age = (datetime.utcnow() - doc["abuse_cached_at"]).total_seconds()
+                if age < _ABUSE_TTL:
+                    data = doc["abuse_data"]
+                    _abuse_cache[ip] = (data, now)
+                    return data.get("score", 0) >= 50, data
+        except Exception as e:
+            logger.warning(f"ip_cache read failed for {ip}: {e}")
+
+        # Cache miss — call AbuseIPDB API
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(
+                    f"{ABUSEIPDB_BASE}/check",
+                    headers={"Key": ABUSEIPDB_API_KEY, "Accept": "application/json"},
+                    params={"ipAddress": ip, "maxAgeInDays": 90},
+                )
+                if r.status_code == 200:
+                    d = r.json()["data"]
+                    data = {
+                        "score": d.get("abuseConfidenceScore", 0),
+                        "total_reports": d.get("totalReports", 0),
+                        "distinct_users": d.get("numDistinctUsers", 0),
+                        "last_reported": d.get("lastReportedAt"),
+                        "isp": d.get("isp"),
+                        "usage_type": d.get("usageType"),
+                        "is_tor": d.get("isTor", False),
+                    }
+                    _abuse_cache[ip] = (data, now)
+                    try:
+                        await get_db().ip_cache.update_one(
+                            {"ip": ip},
+                            {"$set": {
+                                "abuse_data": data,
+                                "abuse_cached_at": datetime.utcnow(),
+                                "expires_at": datetime.utcnow() + timedelta(days=30),
+                            }},
+                            upsert=True,
+                        )
+                    except Exception as e:
+                        logger.warning(f"ip_cache write failed for {ip}: {e}")
+                    return data["score"] >= 50, data
+        except Exception as e:
+            logger.warning(f"AbuseIPDB check failed for {ip}: {e}")
+        return False, {}
+    finally:
+        _abuse_inflight.pop(ip, None)
+        event.set()
 
 
 async def check_shodan(ip: str) -> dict:
     """Returns Shodan host data dict. Two-level cache: in-memory L1 + MongoDB L2.
 
+    In-flight deduplication prevents concurrent workers from racing on the same IP.
     data keys: ports, tags, vulns, org, isp, asn, hostnames, os, last_update
     """
     if not SHODAN_API_KEY:
@@ -116,81 +133,95 @@ async def check_shodan(ip: str) -> dict:
         if now - checked_at < _SHODAN_TTL:
             return data
 
-    # L2: MongoDB
-    try:
-        doc = await get_db().ip_cache.find_one(
-            {"ip": ip}, {"shodan_data": 1, "shodan_cached_at": 1}
-        )
-        if doc and doc.get("shodan_cached_at"):
-            age = (datetime.utcnow() - doc["shodan_cached_at"]).total_seconds()
-            if age < _SHODAN_TTL:
-                data = doc["shodan_data"]
-                _shodan_cache[ip] = (data, now)
-                return data
-    except Exception as e:
-        logger.warning(f"ip_cache read failed for {ip}: {e}")
-
-    # Cache miss — call Shodan API
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"{SHODAN_BASE}/shodan/host/{ip}",
-                params={"key": SHODAN_API_KEY},
-            )
-            if r.status_code == 200:
-                d = r.json()
-                services = d.get("data") or []
-                banners, http_titles, ssl_cns = [], [], []
-                for svc in services:
-                    product = svc.get("product")
-                    version = svc.get("version")
-                    if product:
-                        label = f"{product} {version}".strip() if version else product
-                        if label not in banners:
-                            banners.append(label)
-                    title = (svc.get("http") or {}).get("title")
-                    if title and title.strip() and title not in http_titles:
-                        http_titles.append(title.strip())
-                    cn = (((svc.get("ssl") or {}).get("cert") or {}).get("subject") or {}).get("CN")
-                    if cn and cn not in ssl_cns:
-                        ssl_cns.append(cn)
-                data = {
-                    "ports": sorted(d.get("ports", [])),
-                    "tags": d.get("tags", []),
-                    "vulns": sorted(d["vulns"].keys() if isinstance(d.get("vulns"), dict) else d.get("vulns") or []),
-                    "org": d.get("org"),
-                    "isp": d.get("isp"),
-                    "asn": d.get("asn"),
-                    "hostnames": d.get("hostnames", []),
-                    "domains": d.get("domains", []),
-                    "os": d.get("os"),
-                    "last_update": d.get("last_update"),
-                    "banners": banners[:5],
-                    "http_titles": http_titles[:3],
-                    "ssl_cns": ssl_cns[:3],
-                }
-            elif r.status_code == 404:
-                data = {}
-            else:
-                return {}
-
-            _shodan_cache[ip] = (data, now)
-            try:
-                await get_db().ip_cache.update_one(
-                    {"ip": ip},
-                    {"$set": {
-                        "shodan_data": data,
-                        "shodan_cached_at": datetime.utcnow(),
-                        "expires_at": datetime.utcnow() + timedelta(days=7),
-                    }},
-                    upsert=True,
-                )
-            except Exception as e:
-                logger.warning(f"ip_cache write failed for {ip}: {e}")
+    # In-flight dedup: if another worker is already fetching this IP, wait for it
+    if ip in _shodan_inflight:
+        await _shodan_inflight[ip].wait()
+        if ip in _shodan_cache:
+            data, _ = _shodan_cache[ip]
             return data
-    except Exception as e:
-        logger.warning(f"Shodan check failed for {ip}: {e}")
-    return {}
+        return {}
+
+    event = asyncio.Event()
+    _shodan_inflight[ip] = event
+    try:
+        # L2: MongoDB
+        try:
+            doc = await get_db().ip_cache.find_one(
+                {"ip": ip}, {"shodan_data": 1, "shodan_cached_at": 1}
+            )
+            if doc and doc.get("shodan_cached_at"):
+                age = (datetime.utcnow() - doc["shodan_cached_at"]).total_seconds()
+                if age < _SHODAN_TTL:
+                    data = doc["shodan_data"]
+                    _shodan_cache[ip] = (data, now)
+                    return data
+        except Exception as e:
+            logger.warning(f"ip_cache read failed for {ip}: {e}")
+
+        # Cache miss — call Shodan API
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    f"{SHODAN_BASE}/shodan/host/{ip}",
+                    params={"key": SHODAN_API_KEY},
+                )
+                if r.status_code == 200:
+                    d = r.json()
+                    services = d.get("data") or []
+                    banners, http_titles, ssl_cns = [], [], []
+                    for svc in services:
+                        product = svc.get("product")
+                        version = svc.get("version")
+                        if product:
+                            label = f"{product} {version}".strip() if version else product
+                            if label not in banners:
+                                banners.append(label)
+                        title = (svc.get("http") or {}).get("title")
+                        if title and title.strip() and title not in http_titles:
+                            http_titles.append(title.strip())
+                        cn = (((svc.get("ssl") or {}).get("cert") or {}).get("subject") or {}).get("CN")
+                        if cn and cn not in ssl_cns:
+                            ssl_cns.append(cn)
+                    data = {
+                        "ports": sorted(d.get("ports", [])),
+                        "tags": d.get("tags", []),
+                        "vulns": sorted(d["vulns"].keys() if isinstance(d.get("vulns"), dict) else d.get("vulns") or []),
+                        "org": d.get("org"),
+                        "isp": d.get("isp"),
+                        "asn": d.get("asn"),
+                        "hostnames": d.get("hostnames", []),
+                        "domains": d.get("domains", []),
+                        "os": d.get("os"),
+                        "last_update": d.get("last_update"),
+                        "banners": banners[:5],
+                        "http_titles": http_titles[:3],
+                        "ssl_cns": ssl_cns[:3],
+                    }
+                elif r.status_code == 404:
+                    data = {}
+                else:
+                    return {}
+
+                _shodan_cache[ip] = (data, now)
+                try:
+                    await get_db().ip_cache.update_one(
+                        {"ip": ip},
+                        {"$set": {
+                            "shodan_data": data,
+                            "shodan_cached_at": datetime.utcnow(),
+                            "expires_at": datetime.utcnow() + timedelta(days=30),
+                        }},
+                        upsert=True,
+                    )
+                except Exception as e:
+                    logger.warning(f"ip_cache write failed for {ip}: {e}")
+                return data
+        except Exception as e:
+            logger.warning(f"Shodan check failed for {ip}: {e}")
+        return {}
+    finally:
+        _shodan_inflight.pop(ip, None)
+        event.set()
 
 
 async def report_to_abuseipdb(ip: str, event_type: str) -> None:
