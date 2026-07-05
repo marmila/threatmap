@@ -198,7 +198,6 @@ const PROTOCOL_COLORS = {
   ftp:    { bg: '#083344', color: '#22d3ee', border: '#164e63' },
   mysql:  { bg: '#052e16', color: '#4ade80', border: '#14532d' },
   redis:  { bg: '#431407', color: '#fb923c', border: '#7c2d12' },
-  smb:   { bg: '#450a0a', color: '#f87171', border: '#7f1d1d' },
   mssql: { bg: '#134e4a', color: '#2dd4bf', border: '#115e59' },
   rdp:   { bg: '#500724', color: '#f9a8d4', border: '#831843' },
 }
@@ -326,7 +325,6 @@ export default function StatsPanel({
               {e.protocol === 'ftp' && <span style={{ ...s.badge, background: '#083344', color: '#22d3ee' }}>FTP</span>}
               {e.protocol === 'mysql' && <span style={{ ...s.badge, background: '#052e16', color: '#4ade80' }}>SQL</span>}
               {e.protocol === 'redis' && <span style={{ ...s.badge, background: '#431407', color: '#fb923c' }}>RDB</span>}
-              {e.protocol === 'smb' && <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>SMB</span>}
               {e.protocol === 'mssql' && <span style={{ ...s.badge, background: '#134e4a', color: '#2dd4bf' }}>SQL</span>}
               {e.protocol === 'rdp' && <span style={{ ...s.badge, background: '#500724', color: '#f9a8d4' }}>RDP</span>}
               {e.known_threat && <span style={{ ...s.badge, background: '#450a0a', color: '#f87171' }}>THREAT</span>}

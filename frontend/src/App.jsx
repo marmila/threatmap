@@ -17,7 +17,6 @@ const LEGEND_ITEMS = [
   { color: '#22d3ee', label: 'FTP login' },
   { color: '#4ade80', label: 'MySQL login' },
   { color: '#fb923c', label: 'Redis command' },
-  { color: '#dc2626', label: 'SMB login' },
   { color: '#14b8a6', label: 'MSSQL login' },
   { color: '#ec4899', label: 'RDP login' },
 ]
