@@ -41,8 +41,8 @@ const EVENT_BADGE = {
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
 const flag = (code) => {
-  if (!code || code.length !== 2) return ''
-  return [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('')
+  if (!code || code.length !== 2) return null
+  return <img src={`https://flagcdn.com/16x12/${code.toLowerCase()}.png`} alt={code} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
 }
 
 const abuseColor = (score) => {
