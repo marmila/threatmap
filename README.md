@@ -18,6 +18,8 @@ Cowrie (SSH/Telnet) and OpenCanary (HTTP/FTP/MySQL/Redis) honeypots run on two O
 
 The stats panel has three tabs. **Feed** shows a live deduped event stream with attacker badges (HOT, MULTI, RPT, THREAT) and the detected attack technique inline. **Stats** breaks down attack types, protocols, and sensor activity. **Intel** shows credential leaderboards, top shell commands and HTTP paths, and a PROBES DETECTED leaderboard that classifies attacks into CVE-tier signatures (Log4Shell, Shellshock, PHPUnit RCE) and technique-tier patterns (C2 beacon, SSH key injection, system recon, brute force). Clicking any event opens a detail modal with the full attacker profile: geo, credentials, AbuseIPDB score, Shodan data, and all techniques observed from that IP.
 
+An **Analytics** page (ANALYTICS button, top-left of the globe) provides a full-page drill-down: 7-day attack density heatmap, AbuseIPDB and Shodan API usage charts, score distribution, CVE and port landscape, top attacker networks, a per-IP breakdown of today's attackers with cache hit rate, and a **Pipeline Health** section showing last-seen time per sensor and protocol with green/yellow/red status indicators.
+
 ---
 
 ## Stack
@@ -28,8 +30,8 @@ The stats panel has three tabs. **Feed** shows a live deduped event stream with 
 | Log shipping | Fluent-Bit → WireGuard VPN → Fluentd → Kafka (Strimzi) |
 | Backend | Python 3.12, FastAPI, kafka-python, Motor (MongoDB), httpx |
 | Geolocation | MaxMind GeoLite2 City (local `.mmdb`, downloaded at pod start) |
-| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check with 24h cache, blacklist polled every 6h, auto-reports attackers) |
-| Host intel | Shodan (open ports, CVEs, tags, org, OS - per-IP with 7-day cache, Membership plan) |
+| Threat intel | AlienVault OTX + Abuse.ch Feodo Tracker (polled every 5 min) + AbuseIPDB (per-IP check with 24h cache backed by MongoDB, blacklist min 8h interval persisted in MongoDB, auto-reports attackers) |
+| Host intel | Shodan (open ports, CVEs, tags, org, OS - per-IP with 30-day cache backed by MongoDB, Membership plan) |
 | Frontend | React 18, react-globe.gl, Vite |
 | Persistence | MongoDB |
 
@@ -43,7 +45,7 @@ threatmap/
 │   ├── main.py              FastAPI app, WebSocket broadcaster, REST endpoints
 │   ├── kafka_consumer.py    Kafka consumer, GeoIP enrichment, MongoDB persistence
 │   ├── geoip.py             MaxMind GeoLite2 wrapper
-│   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP AbuseIPDB check (24h cache); Shodan host lookup (7d cache); auto-reports attackers
+│   ├── otx_poller.py        OTX + Feodo + AbuseIPDB blacklist poller; per-IP AbuseIPDB check (24h cache, MongoDB L2); Shodan host lookup (30d cache, MongoDB L2); auto-reports attackers
 │   ├── db.py                Async MongoDB connection (Motor)
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -53,7 +55,8 @@ threatmap/
 │   │   ├── components/
 │   │   │   ├── GlobeMap.jsx     react-globe.gl 3D globe with arc + point layers
 │   │   │   ├── StatsPanel.jsx   Live feed, top countries, total counter
-│   │   │   └── EventDetail.jsx  Click-to-expand modal with full attack detail
+│   │   │   ├── EventDetail.jsx  Click-to-expand modal with full attack detail
+│   │   │   └── AnalyticsPage.jsx Full-page analytics: heatmap, API usage, IP breakdown, CVE/port landscape
 │   │   └── hooks/
 │   │       ├── useWebSocket.js  Auto-reconnecting WebSocket hook
 │   │       └── useWindowSize.js Reactive window dimensions + isMobile flag (< 768px)
@@ -85,7 +88,7 @@ threatmap/
 | `GEOIP_DB_PATH` | `/data/GeoLite2-City.mmdb` | Path to MaxMind mmdb file |
 | `OTX_API_KEY` | - | AlienVault OTX API key (optional, enriches known-threat flags) |
 | `ABUSEIPDB_API_KEY` | - | AbuseIPDB API key - per-IP confidence score, score ≥50 sets known_threat=true |
-| `SHODAN_API_KEY` | - | Shodan Membership API key - per-IP host data (ports, CVEs, tags, org); 7-day cache to stay within 100 credits/month |
+| `SHODAN_API_KEY` | - | Shodan Membership API key - per-IP host data (ports, CVEs, tags, org); 30-day cache (MongoDB-backed) to stay within 100 credits/month |
 | `HOME_LAT` | `45.4654` | Destination latitude (arc endpoint on the globe) |
 | `HOME_LON` | `9.1859` | Destination longitude (arc endpoint on the globe) |
 | `ENRICHMENT_WORKERS` | `8` | Number of concurrent async workers enriching events (AbuseIPDB/Shodan/Mongo lookups run in parallel instead of blocking the Kafka consumer one event at a time) |
@@ -103,7 +106,7 @@ threatmap/
 
 ## Threat intelligence - how it works
 
-**Important:** OTX, Feodo, and AbuseIPDB are **enrichment feeds, not event sources**. They do not generate arcs on the globe. The only event source is the Cowrie honeypots - an arc appears only when a real SSH connection hits them.
+**Important:** OTX, Feodo, and AbuseIPDB are **enrichment feeds, not event sources**. They do not generate arcs on the globe. Event sources are Cowrie (SSH) and OpenCanary (HTTP, FTP, MySQL, Redis, Telnet, RDP, MSSQL) — an arc appears only when a real connection hits one of those honeypot services.
 
 The feeds act as lookup tables to classify attackers:
 
@@ -111,10 +114,10 @@ The feeds act as lookup tables to classify attackers:
 |---|---|---|
 | **AlienVault OTX** | C2 server IPs from subscribed threat intel pulses | `known_threat=true` → red dot + KNOWN THREAT banner, *only if that IP also attacks the honeypot* |
 | **Abuse.ch Feodo Tracker** | Botnet C2 IPs (Emotet, QakBot, TrickBot) | Same as OTX |
-| **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, polled every 6h | Same - flags IP as known threat |
+| **AbuseIPDB blacklist** | High-confidence (≥90%) reported abuser IPs, min 8h interval (persisted in MongoDB `meta` collection to survive restarts) | Same - flags IP as known threat |
 | **AbuseIPDB check (per-IP)** | Real-time reputation score for each attacker IP | Score bar, total reports, distinct reporters, ISP in the detail modal |
 | **AbuseIPDB report** | Auto-reports each attacker back to the community | No UI effect - contributes to the public blocklist |
-| **Shodan** | Open ports, known CVEs, tags (malware/tor/self-signed/etc.), org, OS, hostname for each attacker IP | SHODAN section in detail modal; 7-day per-IP cache (Membership = 100 credits/month) |
+| **Shodan** | Open ports, known CVEs, tags (malware/tor/self-signed/etc.), org, OS, hostname for each attacker IP | SHODAN section in detail modal; 30-day per-IP cache backed by MongoDB `ip_cache` collection (Membership = 100 credits/month) |
 
 OTX and Feodo focus on C2 infrastructure; AbuseIPDB covers a broader range of attack patterns and tends to produce the most matches against honeypot traffic.
 
@@ -154,6 +157,11 @@ The Stage 5 Ansible playbook is Vault-first: it checks each secret in Vault and 
 | `GET /api/stats/redis-commands` | Top 15 Redis commands issued against OpenCanary Redis honeypot |
 | `GET /api/stats/vulns` | Top 10 attack techniques / CVE signatures across all events |
 | `GET /api/ip/{ip}/stats` | Per-IP history: total attacks, first/last seen, event type breakdown, techniques observed |
+| `GET /api/analytics/overview` | Aggregate totals: events all-time/today, unique IPs, AbuseIPDB/Shodan API calls today and all-time, threat rate, cache coverage |
+| `GET /api/analytics/timeline` | 7-day attack density heatmap: `[{dow, hour, count}]` grouped by ISO day-of-week and hour |
+| `GET /api/analytics/intelligence` | Threat intel landscape: AbuseIPDB score distribution, top CVEs/ports/Shodan tags, daily API usage for last 7 days, top attacker orgs |
+| `GET /api/analytics/ips` | Today's IP breakdown: unique/new/repeat counts, AbuseIPDB checks and cache hits, top 25 IPs with country, protocols, abuse score, org |
+| `GET /api/health/pipeline` | Last event time per sensor and per protocol with green/yellow/red status (green <5 min, yellow <30 min, red >30 min) |
 | `WS /ws/events` | Live event stream (JSON, one event per message) |
 | `GET /healthz` | Liveness probe |
 

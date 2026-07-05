@@ -17,12 +17,6 @@ Backlog of planned improvements, grouped by area.
 
 Each needs: OCI ingress rule, iptables rule, OpenCanary config key, `_OPENCANARY_LOGTYPES` entry in `kafka_consumer.py`, arc color in `GlobeMap.jsx`.
 
-Higher scan volume:
-- **SMB** (port 445) — EternalBlue scans, ransomware recon, credential relay; completely different attacker profile
-- **RDP** (port 3389) — massive brute-force target, credential stuffing, ransomware delivery vector
-- **MSSQL** (port 1433) — constant credential stuffing from automated scanners
-
-Medium value:
 - **VNC** (port 5900) — common on exposed home servers and Raspberry Pis
 - **Elasticsearch** (port 9200) — data exfiltration probes, index deletion attacks
 - **HTTP Proxy** (port 8080) — already in `_OPENCANARY_LOGTYPES` (logtype 4000), just needs enabling in OpenCanary config
@@ -40,7 +34,7 @@ Medium value:
 ## Infrastructure
 
 - **Third VM in different region** (US East or Asia Pacific) — different attacker populations and timing patterns; adds a third arc origin on the globe; exposes geographic targeting differences
-- **MongoDB backup to RustFS** — scheduled Velero or mongodump to S3-compatible RustFS; currently MongoDB has no offsite backup
+- **MongoDB backup to RustFS** — migrate daily cron backup (currently mongodump → SCP to honeypot) to S3-compatible RustFS for proper offsite storage
 - **Backend HPA** — horizontal pod autoscaler on the backend during traffic spikes; enrichment queue backs up under high attack volume
 - **AbuseIPDB threshold gating** — only call AbuseIPDB for IPs with >= 3 events in the last hour; cuts quota usage significantly without losing coverage on serious attackers
 
@@ -70,7 +64,6 @@ Medium value:
 
 ## Analytics page
 
-- **UI font size** — current 9–11px monospace is hard to read; bump base size to 12–13px across stat cards, tables, and section headers
 - **Attack wave detection** — show events-per-minute chart to surface burst attacks vs steady background noise
 - **Returning attacker rate** — what % of today's IPs were also seen yesterday, last week? Tracks whether the attacker pool is rotating or persistent
 - **Threat feed export** — `/api/blocklist` endpoint returning high-confidence IPs (abuse_score >= 90 OR known_threat=true) as a plain text list; usable directly in firewall rules or fail2ban
