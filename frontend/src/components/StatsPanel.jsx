@@ -26,7 +26,7 @@ const TYPE_LABEL = (t) => {
 
 const s = {
   panel: {
-    position: 'fixed', top: 0, right: 0, width: '280px', height: '100vh',
+    position: 'fixed', top: 0, right: 0, width: '310px', height: '100vh',
     background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(8px)',
     borderLeft: '1px solid #1e2535',
     display: 'flex', flexDirection: 'column',
@@ -65,28 +65,28 @@ const s = {
     display: 'flex', flexDirection: 'column', gap: '14px',
   },
   section: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { color: '#4ade80', fontSize: '9px', letterSpacing: '2px', marginBottom: '2px' },
-  subLabel: { fontSize: '8px', letterSpacing: '1px', marginBottom: '4px' },
+  label: { color: '#4ade80', fontSize: '11px', letterSpacing: '2px', marginBottom: '2px' },
+  subLabel: { fontSize: '10px', letterSpacing: '1px', marginBottom: '4px' },
   bigNum: { color: '#f1f5f9', fontSize: '26px', fontWeight: 'bold', lineHeight: 1 },
   bigNumMobile: { color: '#f1f5f9', fontSize: '20px', fontWeight: 'bold' },
   bar: { height: '2px', background: '#1e2535', borderRadius: '2px', margin: '2px 0' },
   barFill: { height: '100%', borderRadius: '2px', background: '#fbbf24', transition: 'width 0.5s' },
-  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', gap: '8px' },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', gap: '8px' },
   country: { color: '#94a3b8' },
-  ipAddr: { color: '#60a5fa', fontSize: '10px', fontFamily: 'monospace' },
+  ipAddr: { color: '#60a5fa', fontSize: '12px', fontFamily: 'monospace' },
   count: { color: '#fbbf24', fontWeight: 'bold', flexShrink: 0 },
   feed: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0 },
   event: {
     padding: '6px 8px', background: '#13161f', borderRadius: '4px',
-    fontSize: '10px', cursor: 'pointer',
+    fontSize: '11px', cursor: 'pointer',
   },
   ip: { color: '#60a5fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   detail: { color: '#94a3b8', marginTop: '2px' },
   countBadge: {
-    fontSize: '9px', color: '#475569', background: '#1e2535',
+    fontSize: '10px', color: '#475569', background: '#1e2535',
     borderRadius: '3px', padding: '1px 5px', flexShrink: 0,
   },
-  dimVal: { color: '#64748b', fontSize: '10px' },
+  dimVal: { color: '#64748b', fontSize: '11px' },
 }
 
 function Tab({ label, active, onClick }) {
@@ -95,7 +95,7 @@ function Tab({ label, active, onClick }) {
       flex: 1, padding: '6px 0', background: 'transparent', border: 'none',
       borderBottom: active ? '2px solid #4ade80' : '2px solid transparent',
       color: active ? '#f1f5f9' : '#475569',
-      cursor: 'pointer', fontSize: '9px', letterSpacing: '1.5px',
+      cursor: 'pointer', fontSize: '11px', letterSpacing: '1.5px',
       fontFamily: "'Courier New', monospace",
     }}>
       {label}
@@ -144,7 +144,7 @@ function HourlyChart({ data, dailyData = [] }) {
               background: period === p ? '#1e2535' : 'none',
               border: `1px solid ${period === p ? '#334155' : '#1e2535'}`,
               color: period === p ? '#f1f5f9' : '#475569',
-              cursor: 'pointer', fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+              cursor: 'pointer', fontSize: '10px', padding: '1px 5px', borderRadius: '3px',
               fontFamily: "'Courier New', monospace", letterSpacing: '0.5px',
             }}>{p}</button>
           ))}
@@ -168,7 +168,7 @@ function HourlyChart({ data, dailyData = [] }) {
         {tip && (
           <g>
             <rect x={tipX} y={tipY} width={70} height={15} rx={2} fill="#0f1117" stroke="#334155" strokeWidth={0.5} />
-            <text x={tipX + 4} y={tipY + 10} fill="#fbbf24" fontSize="8" fontFamily="Courier New,monospace">
+            <text x={tipX + 4} y={tipY + 10} fill="#fbbf24" fontSize="10" fontFamily="Courier New,monospace">
               {tip.label} · {tip.count.toLocaleString()}
             </text>
           </g>
@@ -284,23 +284,23 @@ export default function StatsPanel({
   const feedItems = (
     <div style={s.feed}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexShrink: 0 }}>
-        <span style={{ color: paused ? '#fbbf24' : '#475569', fontSize: '9px', letterSpacing: '1px' }}>
+        <span style={{ color: paused ? '#fbbf24' : '#475569', fontSize: '11px', letterSpacing: '1px' }}>
           {paused ? `⏸ PAUSED${newEventCount > 0 ? ` · +${newEventCount} new` : ''}` : `${attacksPerMin}/min`}
         </span>
-        <button onClick={togglePause} style={{ background: 'none', border: '1px solid #1e2535', color: '#94a3b8', cursor: 'pointer', fontSize: '8px', padding: '2px 6px', borderRadius: '3px', letterSpacing: '1px', fontFamily: "'Courier New', monospace" }}>
+        <button onClick={togglePause} style={{ background: 'none', border: '1px solid #1e2535', color: '#94a3b8', cursor: 'pointer', fontSize: '10px', padding: '2px 6px', borderRadius: '3px', letterSpacing: '1px', fontFamily: "'Courier New', monospace" }}>
           {paused ? '▶ RESUME' : '⏸ PAUSE'}
         </button>
       </div>
       {(countryFilter || protocolFilter) && (
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
           {countryFilter && (
-            <span style={{ color: '#94a3b8', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#94a3b8', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '3px' }}>
               ▶ {countryFilter}
               <button onClick={() => setCountryFilter(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px', padding: 0, lineHeight: 1 }}>✕</button>
             </span>
           )}
           {protocolFilter && (
-            <span style={{ color: '#94a3b8', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#94a3b8', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '3px' }}>
               ▶ {protocolFilter.toUpperCase()}
               <button onClick={() => setProtocolFilter(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px', padding: 0, lineHeight: 1 }}>✕</button>
             </span>
@@ -329,7 +329,7 @@ export default function StatsPanel({
           <div style={s.detail}>{flag(e.src_country_code)}{flag(e.src_country_code) ? ' ' : ''}{e.src_country}{e.src_city ? ` · ${e.src_city}` : ''}</div>
           <div style={s.detail}>{e.event_type}{e.username ? ` · ${e.username}` : ''}</div>
           {e.vuln_hint && (
-            <div style={{ fontSize: '8px', marginTop: '2px', color: e.vuln_hint.tier === 'cve' ? '#ef4444' : '#818cf8', letterSpacing: '0.5px' }}>
+            <div style={{ fontSize: '10px', marginTop: '2px', color: e.vuln_hint.tier === 'cve' ? '#ef4444' : '#818cf8', letterSpacing: '0.5px' }}>
               {e.vuln_hint.tier === 'cve' ? '⚠ ' : '◉ '}{e.vuln_hint.label}{e.vuln_hint.cve ? ` · ${e.vuln_hint.cve}` : ''}
             </div>
           )}
@@ -349,7 +349,7 @@ export default function StatsPanel({
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={{ textAlign: 'right' }}>
                 <span style={s.bigNumMobile}>{total.toLocaleString()}</span>
-                {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px' }}>{uniqueIps.toLocaleString()} IPs{lastAgo ? ` · ${lastAgo}` : ''}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
+                {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '1px' }}>{uniqueIps.toLocaleString()} IPs{lastAgo ? ` · ${lastAgo}` : ''}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
               </div>
               {liveBadge}
             </div>
@@ -360,7 +360,7 @@ export default function StatsPanel({
                 <span key={p.protocol}
                   onClick={() => { setProtocolFilter(f => f === p.protocol ? null : p.protocol); setActiveTab('feed') }}
                   style={{
-                    fontSize: '9px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
+                    fontSize: '11px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
                     background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
                     color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
                     border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
@@ -403,7 +403,7 @@ export default function StatsPanel({
                   {topIps.slice(0, 5).map((entry) => (
                     <div key={entry.ip}>
                       <div style={s.row}>
-                        <span style={s.ipAddr}>{entry.ip}{entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}{entry.country_code && <span style={{ color: '#475569', fontSize: '8px', marginLeft: '5px' }}>({entry.country_code})</span>}</span>
+                        <span style={s.ipAddr}>{entry.ip}{entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}{entry.country_code && <span style={{ color: '#475569', fontSize: '10px', marginLeft: '5px' }}>({entry.country_code})</span>}</span>
                         <span style={s.count}>{entry.count.toLocaleString()}</span>
                       </div>
                       <div style={s.bar}><div style={{ ...s.barFill, width: `${(entry.count / maxIpCount) * 100}%` }} /></div>
@@ -427,7 +427,7 @@ export default function StatsPanel({
                           .sort((a, b) => b.count - a.count)
                           .map(p => (
                             <span key={p.protocol} style={{
-                              fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+                              fontSize: '10px', padding: '1px 5px', borderRadius: '3px',
                               background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
                               color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
                             }}>
@@ -447,7 +447,7 @@ export default function StatsPanel({
                       <div style={s.row}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
-                          <span style={{ color: '#94a3b8', fontSize: '9px' }}>{TYPE_LABEL(e.event_type)}</span>
+                          <span style={{ color: '#94a3b8', fontSize: '11px' }}>{TYPE_LABEL(e.event_type)}</span>
                         </span>
                         <span style={s.count}>{e.count.toLocaleString()}</span>
                       </div>
@@ -469,8 +469,8 @@ export default function StatsPanel({
                       <div style={{ ...s.subLabel, color: '#60a5fa' }}>USERNAMES</div>
                       {credentialsData.top_usernames?.slice(0, 6).map((u, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
-                          <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
+                          <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
+                          <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
                         </div>
                       ))}
                     </div>
@@ -478,8 +478,8 @@ export default function StatsPanel({
                       <div style={{ ...s.subLabel, color: '#fb923c' }}>PASSWORDS</div>
                       {credentialsData.top_passwords?.slice(0, 6).map((p, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
-                          <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
+                          <span style={{ color: '#fb923c', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
+                          <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
                         </div>
                       ))}
                     </div>
@@ -491,8 +491,8 @@ export default function StatsPanel({
                   <div style={s.label}>TOP COMMANDS</div>
                   {commandsData.slice(0, 6).map((c, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                      <span style={{ color: '#f97316', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
-                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                      <span style={{ color: '#f97316', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{c.count}</span>
                     </div>
                   ))}
                 </div>
@@ -502,8 +502,8 @@ export default function StatsPanel({
                   <div style={s.label}>TOP PATHS PROBED</div>
                   {httpPathsData.slice(0, 6).map((p, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                      <span style={{ color: '#a78bfa', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
-                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{p.count}</span>
+                      <span style={{ color: '#a78bfa', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{p.count}</span>
                     </div>
                   ))}
                 </div>
@@ -513,8 +513,8 @@ export default function StatsPanel({
                   <div style={s.label}>TOP REDIS COMMANDS</div>
                   {redisCommandsData.slice(0, 6).map((c, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                      <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
-                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                      <span style={{ color: '#fb923c', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{c.count}</span>
                     </div>
                   ))}
                 </div>
@@ -524,8 +524,8 @@ export default function StatsPanel({
                   <div style={s.label}>TOP PROVIDERS</div>
                   {orgsData.slice(0, 6).map((o, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                      <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
-                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
+                      <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
@@ -536,12 +536,12 @@ export default function StatsPanel({
                   {vulnsData.slice(0, 6).map((v, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
-                        <span style={{ flexShrink: 0, fontSize: '8px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
+                        <span style={{ flexShrink: 0, fontSize: '10px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
                           {v.tier === 'cve' ? 'CVE' : 'TEC'}
                         </span>
-                        <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
                       </span>
-                      <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{v.count}</span>
+                      <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{v.count}</span>
                     </div>
                   ))}
                 </div>
@@ -561,18 +561,18 @@ export default function StatsPanel({
         <div style={s.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={s.title}>THREATMAP</div>
-            <div style={{ color: '#334155', fontSize: '9px', letterSpacing: '1px' }}>
+            <div style={{ color: '#334155', fontSize: '10px', letterSpacing: '1px' }}>
               {import.meta.env.VITE_APP_VERSION || 'dev'}
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '8px' }}>
             <div>
               {liveBadge}
-              {lastAgo && <div style={{ color: '#475569', fontSize: '8px', marginTop: '3px', letterSpacing: '1px' }}>{lastAgo}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
+              {lastAgo && <div style={{ color: '#475569', fontSize: '10px', marginTop: '3px', letterSpacing: '1px' }}>{lastAgo}{attacksPerMin > 0 ? ` · ${attacksPerMin}/min` : ''}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={s.bigNum}>{total.toLocaleString()}</div>
-              {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '8px', letterSpacing: '1px', marginTop: '2px' }}>{uniqueIps.toLocaleString()} IPs</div>}
+              {uniqueIps > 0 && <div style={{ color: '#475569', fontSize: '10px', letterSpacing: '1px', marginTop: '2px' }}>{uniqueIps.toLocaleString()} IPs</div>}
             </div>
           </div>
           {filteredProtocol.length > 0 && (
@@ -581,7 +581,7 @@ export default function StatsPanel({
                 <span key={p.protocol}
                   onClick={() => { setProtocolFilter(f => f === p.protocol ? null : p.protocol); setActiveTab('feed') }}
                   style={{
-                    fontSize: '9px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
+                    fontSize: '11px', padding: '2px 7px', borderRadius: '3px', cursor: 'pointer',
                     background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
                     color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
                     border: `1px solid ${(PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).border}`,
@@ -641,7 +641,7 @@ export default function StatsPanel({
                          style={{ ...s.ipAddr, textDecoration: 'none' }}>
                         {entry.ip}
                         {entry.known_threat && <span style={{ color: '#ef4444', marginLeft: '4px' }}>●</span>}
-                        {entry.country_code && <span style={{ color: '#475569', fontSize: '8px', marginLeft: '5px' }}>({entry.country_code})</span>}
+                        {entry.country_code && <span style={{ color: '#475569', fontSize: '10px', marginLeft: '5px' }}>({entry.country_code})</span>}
                       </a>
                       <span style={s.count}>{entry.count.toLocaleString()}</span>
                     </div>
@@ -670,7 +670,7 @@ export default function StatsPanel({
                         .sort((a, b) => b.count - a.count)
                         .map(p => (
                           <span key={p.protocol} style={{
-                            fontSize: '8px', padding: '1px 5px', borderRadius: '3px',
+                            fontSize: '10px', padding: '1px 5px', borderRadius: '3px',
                             background: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).bg,
                             color: (PROTOCOL_COLORS[p.protocol] || PROTOCOL_COLORS.ssh).color,
                           }}>
@@ -690,7 +690,7 @@ export default function StatsPanel({
                     <div style={s.row}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: TYPE_COLOR(e.event_type), flexShrink: 0 }} />
-                        <span style={{ color: '#94a3b8', fontSize: '9px' }}>{TYPE_LABEL(e.event_type)}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px' }}>{TYPE_LABEL(e.event_type)}</span>
                       </span>
                       <span style={s.count}>{e.count.toLocaleString()}</span>
                     </div>
@@ -713,8 +713,8 @@ export default function StatsPanel({
                     <div style={{ ...s.subLabel, color: '#60a5fa' }}>USERNAMES</div>
                     {credentialsData.top_usernames?.slice(0, 8).map((u, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
-                        <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.username}</span>
+                        <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0, marginLeft: '4px' }}>{u.count}</span>
                       </div>
                     ))}
                   </div>
@@ -722,8 +722,8 @@ export default function StatsPanel({
                     <div style={{ ...s.subLabel, color: '#fb923c' }}>PASSWORDS</div>
                     {credentialsData.top_passwords?.slice(0, 8).map((p, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
-                        <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
+                        <span style={{ color: '#fb923c', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.password}</span>
+                        <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0, marginLeft: '4px' }}>{p.count}</span>
                       </div>
                     ))}
                   </div>
@@ -736,8 +736,8 @@ export default function StatsPanel({
                 <div style={s.label}>TOP COMMANDS</div>
                 {commandsData.slice(0, 8).map((c, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                    <span style={{ color: '#f97316', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
-                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                    <span style={{ color: '#f97316', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{c.count}</span>
                   </div>
                 ))}
               </div>
@@ -747,8 +747,8 @@ export default function StatsPanel({
                 <div style={s.label}>TOP PATHS PROBED</div>
                 {httpPathsData.slice(0, 8).map((p, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                    <span style={{ color: '#a78bfa', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
-                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{p.count}</span>
+                    <span style={{ color: '#a78bfa', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{p.count}</span>
                   </div>
                 ))}
               </div>
@@ -758,8 +758,8 @@ export default function StatsPanel({
                 <div style={s.label}>TOP REDIS COMMANDS</div>
                 {redisCommandsData.slice(0, 8).map((c, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                    <span style={{ color: '#fb923c', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
-                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{c.count}</span>
+                    <span style={{ color: '#fb923c', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.command}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{c.count}</span>
                   </div>
                 ))}
               </div>
@@ -769,8 +769,8 @@ export default function StatsPanel({
                 <div style={s.label}>TOP PROVIDERS</div>
                 {orgsData.slice(0, 8).map((o, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                    <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
-                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
+                    <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.org}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{o.count.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -781,12 +781,12 @@ export default function StatsPanel({
                 {vulnsData.slice(0, 8).map((v, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
-                      <span style={{ flexShrink: 0, fontSize: '8px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
+                      <span style={{ flexShrink: 0, fontSize: '10px', padding: '1px 4px', borderRadius: '3px', background: v.tier === 'cve' ? '#450a0a' : '#3d2700', color: v.tier === 'cve' ? '#ef4444' : '#fbbf24' }}>
                         {v.tier === 'cve' ? 'CVE' : 'TEC'}
                       </span>
-                      <span style={{ color: '#94a3b8', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
+                      <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</span>
                     </span>
-                    <span style={{ color: '#fbbf24', fontSize: '9px', flexShrink: 0 }}>{v.count}</span>
+                    <span style={{ color: '#fbbf24', fontSize: '11px', flexShrink: 0 }}>{v.count}</span>
                   </div>
                 ))}
               </div>
