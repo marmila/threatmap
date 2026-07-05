@@ -16,6 +16,9 @@ const EVENT_LABELS = {
   'opencanary.ssh.login':      'SSH LOGIN',
   'opencanary.telnet.login':   'TELNET LOGIN',
   'opencanary.redis.command':  'REDIS COMMAND',
+  'opencanary.smb.login':     'SMB LOGIN',
+  'opencanary.mssql.login':   'MSSQL LOGIN',
+  'opencanary.rdp.login':     'RDP LOGIN',
 }
 
 const EVENT_BADGE = {
@@ -33,6 +36,9 @@ const EVENT_BADGE = {
   'opencanary.ssh.login':      { bg: '#450a0a', color: '#ef4444' },
   'opencanary.telnet.login':   { bg: '#2e1065', color: '#c4b5fd' },
   'opencanary.redis.command':  { bg: '#431407', color: '#fb923c' },
+  'opencanary.smb.login':     { bg: '#450a0a', color: '#f87171' },
+  'opencanary.mssql.login':   { bg: '#134e4a', color: '#2dd4bf' },
+  'opencanary.rdp.login':     { bg: '#500724', color: '#f9a8d4' },
 }
 const DEFAULT_BADGE = { bg: '#3d2700', color: '#fbbf24' }
 
