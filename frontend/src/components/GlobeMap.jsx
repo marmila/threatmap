@@ -16,6 +16,9 @@ const ARC_COLORS = {
   'opencanary.ssh.login':      ['rgba(239,68,68,0.9)',   'rgba(239,68,68,0)'],
   'opencanary.telnet.login':   ['rgba(196,181,253,0.7)', 'rgba(196,181,253,0)'],
   'opencanary.redis.command':  ['rgba(251,146,60,0.9)',  'rgba(251,146,60,0)'],
+  'opencanary.smb.login':     ['rgba(220,38,38,0.9)',   'rgba(220,38,38,0)'],
+  'opencanary.mssql.login':   ['rgba(20,184,166,0.8)',  'rgba(20,184,166,0)'],
+  'opencanary.rdp.login':     ['rgba(236,72,153,0.8)',  'rgba(236,72,153,0)'],
 }
 const DEFAULT_ARC = ['rgba(251,191,36,0.8)', 'rgba(251,191,36,0)']
 
@@ -31,6 +34,9 @@ const POINT_COLORS = {
   'opencanary.ssh.login':      'rgba(239,68,68,0.9)',
   'opencanary.telnet.login':   'rgba(196,181,253,0.7)',
   'opencanary.redis.command':  'rgba(251,146,60,0.9)',
+  'opencanary.smb.login':     'rgba(220,38,38,0.9)',
+  'opencanary.mssql.login':   'rgba(20,184,166,0.8)',
+  'opencanary.rdp.login':     'rgba(236,72,153,0.8)',
 }
 const DEFAULT_POINT = 'rgba(251,191,36,0.7)'
 

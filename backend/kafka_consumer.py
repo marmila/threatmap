@@ -85,8 +85,11 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
     3001: ("opencanary.http.request", "http"),  # 3001=credential POST, 3000=page hit
     4000: ("opencanary.http_proxy.request", "http"),
     4002: ("opencanary.ssh.login", "ssh"),
+    5000: ("opencanary.smb.login", "smb"),
     6001: ("opencanary.telnet.login", "telnet"),
     8001: ("opencanary.mysql.login", "mysql"),
+    9001: ("opencanary.mssql.login", "mssql"),
+    13001: ("opencanary.rdp.login", "rdp"),
     17001: ("opencanary.redis.command", "redis"),
 }
 
