@@ -249,13 +249,39 @@ async def report_to_abuseipdb(ip: str, event_type: str) -> None:
             )
             if r.status_code == 200:
                 logger.info(f"Reported {ip} to AbuseIPDB ({event_type})")
+                try:
+                    await get_db().ip_cache.update_one(
+                        {"ip": ip},
+                        {"$set": {"last_reported_at": datetime.utcnow()}},
+                        upsert=True,
+                    )
+                except Exception as e:
+                    logger.warning(f"ip_cache report timestamp write failed for {ip}: {e}")
             else:
                 logger.warning(f"AbuseIPDB report failed for {ip}: HTTP {r.status_code} {r.text[:100]}")
     except Exception as e:
         logger.warning(f"AbuseIPDB report error for {ip}: {e}")
 
 
+async def _preload_reported_cache() -> None:
+    cutoff = datetime.utcnow() - timedelta(seconds=_REPORT_TTL)
+    try:
+        docs = await get_db().ip_cache.find(
+            {"last_reported_at": {"$gte": cutoff}},
+            {"ip": 1, "last_reported_at": 1},
+        ).to_list(length=None)
+        now = time.time()
+        for doc in docs:
+            age = (datetime.utcnow() - doc["last_reported_at"]).total_seconds()
+            _reported_cache[doc["ip"]] = now - age
+        if docs:
+            logger.info(f"Preloaded {len(docs)} IPs into reported cache from MongoDB")
+    except Exception as e:
+        logger.warning(f"Failed to preload reported cache: {e}")
+
+
 async def start_threat_poller():
+    await _preload_reported_cache()
     await _refresh_blacklist()
     cycles = 0
     while True:
