@@ -598,6 +598,55 @@ async def analytics_intelligence():
     return result
 
 
+@app.get("/api/health/pipeline")
+async def pipeline_health():
+    db = get_db()
+    now = datetime.now(timezone.utc)
+
+    sensor_agg, protocol_agg = await asyncio.gather(
+        db.events.aggregate([
+            {"$group": {"_id": "$honeypot", "last_seen": {"$max": "$_ts"}}},
+            {"$sort": {"_id": 1}},
+        ]).to_list(length=None),
+        db.events.aggregate([
+            {"$match": {"protocol": {"$nin": [None, "unknown"]}}},
+            {"$group": {"_id": "$protocol", "last_seen": {"$max": "$_ts"}}},
+            {"$sort": {"_id": 1}},
+        ]).to_list(length=None),
+    )
+
+    def _status(last_seen):
+        if not last_seen:
+            return "red"
+        age = (now - last_seen).total_seconds()
+        if age < 300:
+            return "green"
+        elif age < 1800:
+            return "yellow"
+        return "red"
+
+    def _fmt(last_seen):
+        if not last_seen:
+            return "never"
+        age = (now - last_seen).total_seconds()
+        if age < 60:
+            return f"{int(age)}s ago"
+        elif age < 3600:
+            return f"{int(age / 60)}m ago"
+        return f"{int(age / 3600)}h ago"
+
+    return {
+        "sensors": [
+            {"name": s["_id"], "age_label": _fmt(s["last_seen"]), "status": _status(s["last_seen"])}
+            for s in sensor_agg if s["_id"]
+        ],
+        "protocols": [
+            {"name": p["_id"], "age_label": _fmt(p["last_seen"]), "status": _status(p["last_seen"])}
+            for p in protocol_agg if p["_id"]
+        ],
+    }
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}

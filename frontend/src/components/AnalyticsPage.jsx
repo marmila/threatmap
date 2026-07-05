@@ -178,23 +178,26 @@ export default function AnalyticsPage({ onBack }) {
   const [timeline, setTimeline] = useState([])
   const [intelligence, setIntelligence] = useState(null)
   const [ips, setIps] = useState(null)
+  const [pipeline, setPipeline] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [ovRes, tlRes, intRes, ipsRes] = await Promise.all([
+      const [ovRes, tlRes, intRes, ipsRes, plRes] = await Promise.all([
         fetch('/api/analytics/overview'),
         fetch('/api/analytics/timeline?days=7'),
         fetch('/api/analytics/intelligence'),
         fetch('/api/analytics/ips'),
+        fetch('/api/health/pipeline'),
       ])
-      const [ov, tl, int, ip] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json()])
+      const [ov, tl, int, ip, pl] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json(), plRes.json()])
       setOverview(ov)
       setTimeline(tl)
       setIntelligence(int)
       setIps(ip)
+      setPipeline(pl)
       setRefreshedAt(new Date())
     } catch (e) {
       console.error('Analytics load failed', e)
@@ -498,6 +501,47 @@ export default function AnalyticsPage({ onBack }) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Pipeline Health ── */}
+          {pipeline && (
+            <>
+              <div style={SECTION}>PIPELINE HEALTH</div>
+              <div style={{ ...col2, marginBottom: '16px' }}>
+                <div style={CARD}>
+                  <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '2px', marginBottom: '14px' }}>SENSORS</div>
+                  {pipeline.sensors.map(s => (
+                    <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{s.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', color: '#475569' }}>{s.age_label}</span>
+                        <span style={{
+                          width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block',
+                          background: s.status === 'green' ? '#4ade80' : s.status === 'yellow' ? '#fbbf24' : '#ef4444',
+                          boxShadow: s.status === 'green' ? '0 0 6px #4ade80' : s.status === 'yellow' ? '0 0 6px #fbbf24' : '0 0 6px #ef4444',
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={CARD}>
+                  <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '2px', marginBottom: '14px' }}>PROTOCOLS</div>
+                  {pipeline.protocols.map(p => (
+                    <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase' }}>{p.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', color: '#475569' }}>{p.age_label}</span>
+                        <span style={{
+                          width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block',
+                          background: p.status === 'green' ? '#4ade80' : p.status === 'yellow' ? '#fbbf24' : '#ef4444',
+                          boxShadow: p.status === 'green' ? '0 0 6px #4ade80' : p.status === 'yellow' ? '0 0 6px #fbbf24' : '0 0 6px #ef4444',
+                        }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </>
