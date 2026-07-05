@@ -601,7 +601,7 @@ async def analytics_intelligence():
 @app.get("/api/health/pipeline")
 async def pipeline_health():
     db = get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     sensor_agg, protocol_agg = await asyncio.gather(
         db.events.aggregate([
