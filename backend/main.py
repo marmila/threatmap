@@ -647,6 +647,42 @@ async def pipeline_health():
     }
 
 
+@app.get("/api/analytics/daily-by-sensor")
+async def analytics_daily_by_sensor(days: int = 10):
+    cache_key = f"daily_by_sensor_{days}"
+    if (cached := _cache_get(cache_key)) is not None:
+        return cached
+    db = get_db()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    pipeline = [
+        {"$match": {"_ts": {"$gte": since}}},
+        {"$group": {
+            "_id": {
+                "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$_ts"}},
+                "honeypot": "$honeypot",
+            },
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(days * 10)
+    by_date = {}
+    sensors = set()
+    for r in results:
+        date = r["_id"]["date"]
+        hp = r["_id"]["honeypot"]
+        if not hp or hp == "unknown":
+            continue
+        if date not in by_date:
+            by_date[date] = {}
+        by_date[date][hp] = r["count"]
+        sensors.add(hp)
+    data = [{"date": date, **counts} for date, counts in sorted(by_date.items())]
+    result = {"sensors": sorted(sensors), "data": data}
+    _cache_set(cache_key, result)
+    return result
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
