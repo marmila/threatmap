@@ -647,6 +647,50 @@ async def pipeline_health():
     }
 
 
+@app.get("/api/analytics/daily-by-software")
+async def analytics_daily_by_software(days: int = 10):
+    cache_key = f"daily_by_software_{days}"
+    if (cached := _cache_get(cache_key)) is not None:
+        return cached
+    db = get_db()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    pipeline = [
+        {"$match": {"_ts": {"$gte": since}}},
+        {"$addFields": {
+            "software": {
+                "$cond": {
+                    "if": {"$regexMatch": {
+                        "input": {"$ifNull": ["$event_type", ""]},
+                        "regex": "^cowrie\\.",
+                    }},
+                    "then": "cowrie",
+                    "else": "opencanary",
+                }
+            }
+        }},
+        {"$group": {
+            "_id": {
+                "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$_ts"}},
+                "software": "$software",
+            },
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    results = await db.events.aggregate(pipeline).to_list(days * 10)
+    by_date = {}
+    for r in results:
+        date = r["_id"]["date"]
+        sw = r["_id"]["software"]
+        if date not in by_date:
+            by_date[date] = {}
+        by_date[date][sw] = r["count"]
+    data = [{"date": date, **counts} for date, counts in sorted(by_date.items())]
+    result = {"data": data}
+    _cache_set(cache_key, result)
+    return result
+
+
 @app.get("/api/analytics/daily-by-sensor")
 async def analytics_daily_by_sensor(days: int = 10):
     cache_key = f"daily_by_sensor_{days}"

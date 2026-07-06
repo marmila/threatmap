@@ -114,6 +114,76 @@ function SensorVBarChart({ sensors, data }) {
   )
 }
 
+const SW_CATEGORIES = ['cowrie', 'opencanary']
+const SW_COLORS = { cowrie: '#fbbf24', opencanary: '#a78bfa' }
+const SW_LABELS = { cowrie: 'Cowrie (SSH/Telnet)', opencanary: 'OpenCanary (HTTP/FTP/MySQL/Redis/RDP/MSSQL)' }
+
+function StackedVBarChart({ data }) {
+  const totals = data.map(d => SW_CATEGORIES.reduce((s, c) => s + (d[c] || 0), 0))
+  const max = Math.max(...totals, 1)
+  const MAX_H = 140
+  const periodTotal = totals.reduce((a, b) => a + b, 0)
+  const peakIdx = totals.indexOf(Math.max(...totals))
+  const peakDay = data[peakIdx]?.date?.slice(5) ?? '—'
+  const peakVal = totals[peakIdx] ?? 0
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '24px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>TOTAL (10D)</div>
+          <div style={{ fontSize: '20px', color: '#4ade80', fontWeight: 'bold' }}>{periodTotal.toLocaleString()}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>PEAK DAY</div>
+          <div style={{ fontSize: '20px', color: '#f97316', fontWeight: 'bold' }}>{peakDay}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>PEAK COUNT</div>
+          <div style={{ fontSize: '20px', color: '#ef4444', fontWeight: 'bold' }}>{peakVal.toLocaleString()}</div>
+        </div>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', minWidth: `${data.length * 54}px`, paddingBottom: '4px' }}>
+          {data.map((d, i) => (
+            <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: '46px' }}>
+              <div style={{
+                width: '24px', height: `${MAX_H}px`,
+                display: 'flex', flexDirection: 'column-reverse',
+                justifyContent: 'flex-start', overflow: 'hidden',
+                borderRadius: '2px 2px 0 0',
+              }}>
+                {SW_CATEGORIES.map(cat => {
+                  const val = d[cat] || 0
+                  if (!val) return null
+                  const h = (val / max) * MAX_H
+                  return (
+                    <div
+                      key={cat}
+                      title={`${cat}: ${val.toLocaleString()}`}
+                      style={{ height: `${h}px`, background: SW_COLORS[cat], flexShrink: 0, opacity: 0.85 }}
+                    />
+                  )
+                })}
+              </div>
+              <div style={{ height: '1px', background: '#1e2535', width: '100%', marginBottom: '5px' }} />
+              <span style={{ fontSize: '9px', color: '#475569', whiteSpace: 'nowrap' }}>{d.date.slice(5)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '14px' }}>
+        {SW_CATEGORIES.map(cat => (
+          <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '10px', height: '10px', background: SW_COLORS[cat], borderRadius: '2px', flexShrink: 0 }} />
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>{SW_LABELS[cat]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ScoreBar({ label, count, total, color }) {
   const pct = total > 0 ? (count / total) * 100 : 0
   return (
@@ -246,27 +316,30 @@ export default function AnalyticsPage({ onBack }) {
   const [ips, setIps] = useState(null)
   const [pipeline, setPipeline] = useState(null)
   const [sensorDaily, setSensorDaily] = useState(null)
+  const [softwareDaily, setSoftwareDaily] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [ovRes, tlRes, intRes, ipsRes, plRes, sdRes] = await Promise.all([
+      const [ovRes, tlRes, intRes, ipsRes, plRes, sdRes, swRes] = await Promise.all([
         fetch('/api/analytics/overview'),
         fetch('/api/analytics/timeline?days=7'),
         fetch('/api/analytics/intelligence'),
         fetch('/api/analytics/ips'),
         fetch('/api/health/pipeline'),
         fetch('/api/analytics/daily-by-sensor?days=10'),
+        fetch('/api/analytics/daily-by-software?days=10'),
       ])
-      const [ov, tl, int, ip, pl, sd] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json(), plRes.json(), sdRes.json()])
+      const [ov, tl, int, ip, pl, sd, sw] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json(), plRes.json(), sdRes.json(), swRes.json()])
       setOverview(ov)
       setTimeline(tl)
       setIntelligence(int)
       setIps(ip)
       setPipeline(pl)
       setSensorDaily(sd)
+      setSoftwareDaily(sw)
       setRefreshedAt(new Date())
     } catch (e) {
       console.error('Analytics load failed', e)
@@ -616,10 +689,20 @@ export default function AnalyticsPage({ onBack }) {
             </>
           )}
 
-          {/* ── Daily events by sensor ── */}
+          {/* ── Daily events by software (Cowrie vs OpenCanary) ── */}
+          {softwareDaily?.data?.length > 0 && (
+            <>
+              <div style={SECTION}>COWRIE vs OPENCANARY — LAST 10 DAYS</div>
+              <div style={CARD}>
+                <StackedVBarChart data={softwareDaily.data} />
+              </div>
+            </>
+          )}
+
+          {/* ── Daily events by sensor VM ── */}
           {sensorDaily?.data?.length > 0 && (
             <>
-              <div style={SECTION}>EVENTS BY SENSOR — LAST 10 DAYS</div>
+              <div style={SECTION}>EVENTS BY VM — LAST 10 DAYS</div>
               <div style={CARD}>
                 <SensorVBarChart sensors={sensorDaily.sensors} data={sensorDaily.data} />
               </div>
