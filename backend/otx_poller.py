@@ -24,7 +24,7 @@ _abuse_inflight: dict[str, asyncio.Event] = {}     # ip -> event signaled when A
 _shodan_inflight: dict[str, asyncio.Event] = {}
 _ABUSE_TTL = 86400      # 24 hours per-IP AbuseIPDB cache
 _SHODAN_TTL = 2592000  # 30 days — Shodan membership = 100 credits/month; 42 IPs/day × 30d fits budget
-_REPORT_TTL = 900      # 15 min minimum between reports for same IP (AbuseIPDB TOS)
+_REPORT_TTL = 86400    # 24h between reports for same IP — one report/day is enough for the community
 
 _REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
