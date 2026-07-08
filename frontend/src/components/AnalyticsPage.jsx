@@ -180,6 +180,37 @@ function StackedVBarChart({ data }) {
           </div>
         ))}
       </div>
+      <div style={{ marginTop: '20px', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {['DATE', 'COWRIE', 'OPENCANARY', 'OC %'].map(h => (
+                <th key={h} style={{
+                  textAlign: 'right', color: '#475569', fontSize: '9px',
+                  letterSpacing: '1px', paddingBottom: '8px', paddingRight: '16px',
+                  fontWeight: 'normal',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(d => {
+              const cowrie = d.cowrie || 0
+              const oc = d.opencanary || 0
+              const total = cowrie + oc
+              const ocPct = total > 0 ? ((oc / total) * 100).toFixed(1) : '0.0'
+              return (
+                <tr key={d.date} style={{ borderTop: '1px solid #1a2535' }}>
+                  <td style={{ padding: '6px 16px 6px 0', color: '#475569', fontSize: '10px', textAlign: 'right' }}>{d.date.slice(5)}</td>
+                  <td style={{ padding: '6px 16px 6px 0', color: '#fbbf24', fontSize: '10px', textAlign: 'right' }}>{cowrie.toLocaleString()}</td>
+                  <td style={{ padding: '6px 16px 6px 0', color: '#a78bfa', fontSize: '10px', textAlign: 'right' }}>{oc.toLocaleString()}</td>
+                  <td style={{ padding: '6px 0 6px 0', color: '#64748b', fontSize: '10px', textAlign: 'right' }}>{ocPct}%</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
