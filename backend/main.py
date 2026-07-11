@@ -688,30 +688,14 @@ async def analytics_daily_by_software(days: int = 10):
         return cached
     db = get_db()
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    # Use stored software field when present; fall back to event_type regex for docs
-    # not yet backfilled. After backfill completes all docs have software set and the
-    # regex branch never fires. {_ts} index covers the time-range match.
+    # Backfill complete: all docs have software field. {_ts,software} compound index
+    # makes this aggregation index-covered — zero doc reads.
     pipeline = [
-        {"$match": {"_ts": {"$gte": since}}},
-        {"$addFields": {
-            "_sw": {
-                "$ifNull": [
-                    "$software",
-                    {"$cond": {
-                        "if": {"$regexMatch": {
-                            "input": {"$ifNull": ["$event_type", ""]},
-                            "regex": "^cowrie\\.",
-                        }},
-                        "then": "cowrie",
-                        "else": "opencanary",
-                    }},
-                ]
-            }
-        }},
+        {"$match": {"_ts": {"$gte": since}, "software": {"$in": ["cowrie", "opencanary"]}}},
         {"$group": {
             "_id": {
                 "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$_ts"}},
-                "software": "$_sw",
+                "software": "$software",
             },
             "count": {"$sum": 1},
         }},
