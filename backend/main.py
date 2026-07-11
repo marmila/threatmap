@@ -41,10 +41,19 @@ async def _broadcast(event: dict):
     _clients.difference_update(dead)
 
 
+async def _run_backfill():
+    await backfill_software_org()
+    # Evict caches that may have been populated before backfill completed with wrong data
+    for key in list(_stats_cache.keys()):
+        if any(k in key for k in ("daily_by_software", "orgs", "analytics_overview")):
+            _stats_cache.pop(key, None)
+    logger.info("Post-backfill cache invalidated")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await ensure_indexes()
-    asyncio.create_task(backfill_software_org())
+    asyncio.create_task(_run_backfill())
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -308,11 +317,20 @@ async def orgs_stats():
     if (cached := _cache_get("orgs")) is not None:
         return cached
     db = get_db()
-    # Use the stored `org` field (set at insert time, backfilled at startup).
-    # Avoids the old $project-before-$match pattern that forced a 400k COLLSCAN.
+    # $match on the source fields first (indexable) then project org via $ifNull.
+    # For docs that already have the stored org field it uses that; for old docs not yet
+    # backfilled it derives it on the fly. After backfill the {org:1} index kicks in.
     pipeline = [
-        {"$match": {"org": {"$nin": [None, ""]}}},
-        {"$group": {"_id": "$org", "count": {"$sum": 1}}},
+        {"$match": {"$or": [
+            {"org": {"$nin": [None, ""]}},
+            {"shodan_org": {"$nin": [None, ""]}},
+            {"abuse_isp": {"$nin": [None, ""]}},
+        ]}},
+        {"$project": {
+            "_org": {"$ifNull": ["$org", {"$ifNull": ["$shodan_org", "$abuse_isp"]}]}
+        }},
+        {"$match": {"_org": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$_org", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
         {"$limit": 10},
         {"$project": {"org": "$_id", "count": 1, "_id": 0}},
@@ -670,14 +688,30 @@ async def analytics_daily_by_software(days: int = 10):
         return cached
     db = get_db()
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    # {_ts, software} compound index makes this index-covered (no doc reads needed).
-    # The software field is stored at insert time and backfilled at startup.
+    # Use stored software field when present; fall back to event_type regex for docs
+    # not yet backfilled. After backfill completes all docs have software set and the
+    # regex branch never fires. {_ts} index covers the time-range match.
     pipeline = [
-        {"$match": {"_ts": {"$gte": since}, "software": {"$in": ["cowrie", "opencanary"]}}},
+        {"$match": {"_ts": {"$gte": since}}},
+        {"$addFields": {
+            "_sw": {
+                "$ifNull": [
+                    "$software",
+                    {"$cond": {
+                        "if": {"$regexMatch": {
+                            "input": {"$ifNull": ["$event_type", ""]},
+                            "regex": "^cowrie\\.",
+                        }},
+                        "then": "cowrie",
+                        "else": "opencanary",
+                    }},
+                ]
+            }
+        }},
         {"$group": {
             "_id": {
                 "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$_ts"}},
-                "software": "$software",
+                "software": "$_sw",
             },
             "count": {"$sum": 1},
         }},
