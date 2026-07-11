@@ -23,8 +23,9 @@ _reported_cache: dict[str, float] = {}             # ip -> last_reported_at
 _abuse_inflight: dict[str, asyncio.Event] = {}     # ip -> event signaled when API call completes
 _shodan_inflight: dict[str, asyncio.Event] = {}
 _ABUSE_TTL = 86400      # 24 hours per-IP AbuseIPDB cache
-_SHODAN_TTL = 2592000  # 30 days — Shodan membership = 100 credits/month; 42 IPs/day × 30d fits budget
+_SHODAN_TTL = 2592000  # 30 days host-lookup cache; host lookups don't consume query credits on Membership
 _REPORT_TTL = 86400    # 24h between reports for same IP — one report/day is enough for the community
+_SCAN_BUDGET_MONTHLY = 80  # on-demand scan credits to use per month; keeps 20 in reserve out of 100
 
 _REPORTABLE_TYPES = {"cowrie.login.failed", "cowrie.login.success", "cowrie.command.input"}
 
@@ -280,6 +281,91 @@ async def _preload_reported_cache() -> None:
         logger.warning(f"Failed to preload reported cache: {e}")
 
 
+async def _fetch_after_scan_delay(ips: list[str], delay: int = 600) -> None:
+    """Wait for an on-demand scan to finish, then refresh Shodan data for those IPs."""
+    await asyncio.sleep(delay)
+    for ip in ips:
+        _shodan_cache.pop(ip, None)
+        try:
+            await get_db().ip_cache.update_one(
+                {"ip": ip},
+                {"$unset": {"shodan_cached_at": "", "shodan_data": ""},
+                 "$set": {"shodan_scan_pending": False}},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to clear Shodan cache pre-refresh for {ip}: {e}")
+        await check_shodan(ip)
+    logger.info(f"Shodan post-scan refresh complete for {len(ips)} IPs")
+
+
+async def _scan_unknown_threats() -> None:
+    """Submit on-demand Shodan scans for known-threat IPs that have no host data yet.
+
+    Runs hourly. Caps at _SCAN_BUDGET_MONTHLY scan credits/month (100 hard limit on Membership).
+    After submitting, waits 10 min then fetches fresh host data via the normal host-lookup endpoint.
+    """
+    if not SHODAN_API_KEY:
+        return
+
+    db = get_db()
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    credits_used = await db.ip_cache.count_documents({"shodan_scanned_at": {"$gte": month_start}})
+    if credits_used >= _SCAN_BUDGET_MONTHLY:
+        logger.info(f"Shodan scan budget exhausted ({credits_used}/{_SCAN_BUDGET_MONTHLY}), skipping")
+        return
+
+    batch = min(3, _SCAN_BUDGET_MONTHLY - credits_used)
+
+    # Known-threat IPs from our events that have no cached Shodan host data
+    known_threat_ips_cursor = db.events.aggregate([
+        {"$match": {"known_threat": True}},
+        {"$group": {"_id": "$src_ip"}},
+        {"$limit": 100},
+    ])
+    known_threat_ips = [doc["_id"] async for doc in known_threat_ips_cursor]
+    if not known_threat_ips:
+        return
+
+    already_handled = set()
+    async for doc in db.ip_cache.find(
+        {"ip": {"$in": known_threat_ips}, "$or": [
+            {"shodan_cached_at": {"$exists": True}},
+            {"shodan_scanned_at": {"$gte": month_start}},
+        ]},
+        {"ip": 1},
+    ):
+        already_handled.add(doc["ip"])
+
+    to_scan = [ip for ip in known_threat_ips if ip not in already_handled][:batch]
+    if not to_scan:
+        logger.debug("No known-threat IPs without Shodan data to scan")
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{SHODAN_BASE}/shodan/scan",
+                params={"key": SHODAN_API_KEY},
+                data={"ips": ",".join(to_scan)},
+            )
+        if r.status_code == 200:
+            scan_id = r.json().get("id")
+            logger.info(f"Shodan on-demand scan submitted for {len(to_scan)} known-threat IPs, scan_id={scan_id}")
+            now = datetime.utcnow()
+            for ip in to_scan:
+                _shodan_cache.pop(ip, None)
+                await db.ip_cache.update_one(
+                    {"ip": ip},
+                    {"$set": {"shodan_scanned_at": now, "shodan_scan_pending": True}},
+                    upsert=True,
+                )
+            asyncio.create_task(_fetch_after_scan_delay(to_scan, delay=600))
+        else:
+            logger.warning(f"Shodan scan HTTP {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        logger.warning(f"Shodan on-demand scan error: {e}")
+
+
 async def start_threat_poller():
     await _preload_reported_cache()
     await _refresh_blacklist()
@@ -295,6 +381,11 @@ async def start_threat_poller():
                 await _refresh_blacklist()
             except Exception as e:
                 logger.error(f"Blacklist refresh error: {e}")
+        if cycles % 12 == 0:  # every hour
+            try:
+                await _scan_unknown_threats()
+            except Exception as e:
+                logger.error(f"Shodan on-demand scan error: {e}")
         await asyncio.sleep(300)
 
 

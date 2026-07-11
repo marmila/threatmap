@@ -829,7 +829,7 @@ export default function AnalyticsPage({ onBack }) {
               <div style={{ fontSize: '10px', color: '#22d3ee', letterSpacing: '2px', marginBottom: '4px' }}>SHODAN</div>
               <div style={{ fontSize: '10px', color: '#475569', marginBottom: '16px' }}>100 credits/month · membership plan</div>
 
-              {/* Monthly lookup counter */}
+              {/* Monthly counters */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                   <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>HOST LOOKUPS THIS MONTH</span>
@@ -837,7 +837,25 @@ export default function AnalyticsPage({ onBack }) {
                     {shodanMonthUsed.toLocaleString()}
                   </span>
                 </div>
-                <div style={{ fontSize: '10px', color: '#2d3748' }}>host lookups are free — no credit cost on membership plan</div>
+                <div style={{ fontSize: '10px', color: '#2d3748', marginBottom: '16px' }}>host lookups don't consume credits on membership plan</div>
+
+                {(() => {
+                  const scans = overview?.shodan_scans_this_month || 0
+                  const scanWarn = scans >= 64
+                  const scanPct = Math.min(100, Math.round(scans / 80 * 100))
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>ON-DEMAND SCANS THIS MONTH</span>
+                        <span style={{ fontSize: '11px', color: scanWarn ? '#f97316' : '#22d3ee' }}>{scans} / 80</span>
+                      </div>
+                      <div style={{ height: '6px', background: '#1e2535', borderRadius: '3px' }}>
+                        <div style={{ height: '100%', width: `${scanPct}%`, background: scanWarn ? '#f97316' : '#22d3ee', borderRadius: '3px' }} />
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#2d3748', marginTop: '4px' }}>auto-scans known-threat IPs with no host data · 100 scan credits/month hard limit</div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Coverage */}

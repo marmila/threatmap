@@ -448,6 +448,7 @@ async def analytics_overview():
         shodan_today,
         shodan_total,
         shodan_this_month,
+        shodan_scans_this_month,
         threat_count,
         total_checked,
     ) = await asyncio.gather(
@@ -460,6 +461,7 @@ async def analytics_overview():
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": month_start}}),
+        db.ip_cache.count_documents({"shodan_scanned_at": {"$gte": month_start}}),
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
         db.ip_cache.count_documents({"abuse_data": {"$exists": True}}),
     )
@@ -475,6 +477,7 @@ async def analytics_overview():
         "shodan_today": shodan_today,
         "shodan_total": shodan_total,
         "shodan_this_month": shodan_this_month,
+        "shodan_scans_this_month": shodan_scans_this_month,
         "threat_rate": threat_rate,
         "total_checked": total_checked,
     }
