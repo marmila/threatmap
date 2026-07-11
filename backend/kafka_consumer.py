@@ -26,7 +26,7 @@ ENRICHMENT_QUEUE_MAXSIZE = int(os.getenv("ENRICHMENT_QUEUE_MAXSIZE", "500"))
 
 _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
 _ip_check_cache: dict[str, tuple[int, bool, float]] = {}  # ip -> (prev_count, is_multi, expires_at)
-_IP_CHECK_TTL = 60.0
+_IP_CHECK_TTL = 300.0
 
 VULN_SIGNATURES = [
     # CVE tier — unambiguous exploit payload signatures
@@ -98,12 +98,20 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
 async def _db_check_ip(ip: str, protocol: str) -> tuple[int, bool]:
     """Returns (prev_event_count, is_multi_protocol).
 
-    Results are cached for 60s per IP. For a hot IP with 61k events the COUNT_SCAN
-    takes 250ms and fires on every incoming packet without caching — unacceptable at scale.
+    Cached for 5 min per IP. For a hot IP (185.166.25.150 has 61k events) the
+    COUNT_SCAN takes ~1.5s. Without caching that fires on every packet.
+
+    Thundering herd protection: when the cache entry expires, immediately renew
+    the TTL using the stale value before hitting MongoDB. Concurrent workers find
+    the renewed entry and return the stale value instead of all going to DB.
     """
     now = time.time()
-    if (cached := _ip_check_cache.get(ip)) and now < cached[2]:
+    cached = _ip_check_cache.get(ip)
+    if cached and now < cached[2]:
         return cached[0], cached[1]
+    if cached:
+        # Optimistically extend TTL so concurrent workers don't pile on MongoDB.
+        _ip_check_cache[ip] = (cached[0], cached[1], now + _IP_CHECK_TTL)
     db = get_db()
     prev_count, other_protocols = await asyncio.gather(
         db.events.count_documents({"src_ip": ip}),

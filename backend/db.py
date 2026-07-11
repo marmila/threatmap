@@ -27,50 +27,49 @@ async def close_db():
 
 async def ensure_indexes():
     col = get_db().events
-    # per-IP queries: _db_check_ip runs on every enriched event
+
+    # Drop indexes that are now redundant or cause excess write amplification.
+    # {timestamp_1}: string field replaced by _ts (BSON Date) in all queries.
+    # {event_type_1}: single-field index fully covered by {event_type,command}
+    #   and {event_type,path} compound indexes (MongoDB uses compound prefix).
+    # {org_1}: orgs_stats uses $or on shodan_org/abuse_isp/org; single-field
+    #   index doesn't help $or, and write cost is not worth it.
+    for dead_index in ("timestamp_1", "event_type_1", "org_1"):
+        try:
+            await col.drop_index(dead_index)
+            logger.info(f"Dropped redundant index: {dead_index}")
+        except Exception:
+            pass  # already absent
+
+    # Create/ensure surviving indexes (idempotent).
     await col.create_index([("src_ip", 1), ("protocol", 1)])
-    # time-range queries: hourly / daily stats pipelines
-    await col.create_index([("timestamp", 1)])
-    # event-type filtering: commands / http-paths / redis / vulns stats
-    await col.create_index([("event_type", 1)])
-    # TTL: drop events older than 90 days (_ts is a BSON Date set at insert time)
     await col.create_index([("_ts", 1)], expireAfterSeconds=90 * 24 * 3600)
-    # {_ts, known_threat}: known_threats_today count avoids full doc scan
     await col.create_index([("_ts", 1), ("known_threat", 1)])
-    # {_ts, software}: daily-by-software — index-covered aggregation (no doc reads)
     await col.create_index([("_ts", 1), ("software", 1)])
-    # {event_type, command}: commands + redis-commands — index-covered aggregation
     await col.create_index([("event_type", 1), ("command", 1)])
-    # {event_type, path}: http-paths — index-covered aggregation
     await col.create_index([("event_type", 1), ("path", 1)])
-    # {honeypot, _ts} and {protocol, _ts}: pipeline_health max-per-group — index-covered
     await col.create_index([("honeypot", 1), ("_ts", 1)])
     await col.create_index([("protocol", 1), ("_ts", 1)])
-    # username / password: credentials queries — index-covered group (no doc reads)
     await col.create_index([("username", 1)])
     await col.create_index([("password", 1)])
-    # org: orgs_stats — plain indexed lookup after backfill stores field at insert
-    await col.create_index([("org", 1)])
-    # shodan_org: top_orgs in analytics_intelligence
     await col.create_index([("shodan_org", 1)])
-    # ip_cache collection: AbuseIPDB + Shodan results persisted across restarts
+
     cache = get_db().ip_cache
     await cache.create_index([("ip", 1)], unique=True)
     await cache.create_index([("expires_at", 1)], expireAfterSeconds=0)
-    # analytics queries — all were doing COLLSCAN without these
     await cache.create_index([("abuse_cached_at", 1)])
     await cache.create_index([("shodan_cached_at", 1)])
     await cache.create_index([("shodan_scanned_at", 1)])
     await cache.create_index([("abuse_data.score", 1)])
+
     logger.info("MongoDB indexes ensured")
 
 
 async def backfill_software_org():
     """One-time backfill: add software + org fields to existing events that lack them.
 
-    Runs in background at startup. New events get the fields at insert time (kafka_consumer._persist).
-    software: anchored regex on event_type uses the existing event_type B-tree index (range scan).
-    org: pipeline update for $ifNull — only touches docs that have shodan_org or abuse_isp.
+    Runs in background at startup. New events get the fields at insert time.
+    Anchored regex on event_type uses the compound index prefix for a B-tree range scan.
     """
     col = get_db().events
     r1 = await col.update_many(
