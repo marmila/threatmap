@@ -612,6 +612,8 @@ async def analytics_intelligence():
 
 @app.get("/api/health/pipeline")
 async def pipeline_health():
+    if (cached := _cache_get("pipeline_health")) is not None:
+        return cached
     db = get_db()
     now = datetime.utcnow()
 
@@ -647,7 +649,7 @@ async def pipeline_health():
             return f"{int(age / 60)}m ago"
         return f"{int(age / 3600)}h ago"
 
-    return {
+    result = {
         "sensors": [
             {"name": s["_id"], "age_label": _fmt(s["last_seen"]), "status": _status(s["last_seen"])}
             for s in sensor_agg if s["_id"]
@@ -657,6 +659,8 @@ async def pipeline_health():
             for p in protocol_agg if p["_id"]
         ],
     }
+    _stats_cache["pipeline_health"] = (result, time.monotonic() + 60)
+    return result
 
 
 @app.get("/api/analytics/daily-by-software")

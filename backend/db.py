@@ -43,6 +43,9 @@ async def ensure_indexes():
     await col.create_index([("event_type", 1), ("command", 1)])
     # {event_type, path}: http-paths — index-covered aggregation
     await col.create_index([("event_type", 1), ("path", 1)])
+    # {honeypot, _ts} and {protocol, _ts}: pipeline_health max-per-group — index-covered
+    await col.create_index([("honeypot", 1), ("_ts", 1)])
+    await col.create_index([("protocol", 1), ("_ts", 1)])
     # username / password: credentials queries — index-covered group (no doc reads)
     await col.create_index([("username", 1)])
     await col.create_index([("password", 1)])

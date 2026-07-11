@@ -25,6 +25,8 @@ ENRICHMENT_WORKERS = int(os.getenv("ENRICHMENT_WORKERS", "8"))
 ENRICHMENT_QUEUE_MAXSIZE = int(os.getenv("ENRICHMENT_QUEUE_MAXSIZE", "500"))
 
 _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for velocity detection
+_ip_check_cache: dict[str, tuple[int, bool, float]] = {}  # ip -> (prev_count, is_multi, expires_at)
+_IP_CHECK_TTL = 60.0
 
 VULN_SIGNATURES = [
     # CVE tier — unambiguous exploit payload signatures
@@ -94,13 +96,22 @@ _OPENCANARY_LOGTYPES: dict[int, tuple[str, str]] = {
 
 
 async def _db_check_ip(ip: str, protocol: str) -> tuple[int, bool]:
-    """Returns (prev_event_count, is_multi_protocol). Queries MongoDB so it survives restarts."""
+    """Returns (prev_event_count, is_multi_protocol).
+
+    Results are cached for 60s per IP. For a hot IP with 61k events the COUNT_SCAN
+    takes 250ms and fires on every incoming packet without caching — unacceptable at scale.
+    """
+    now = time.time()
+    if (cached := _ip_check_cache.get(ip)) and now < cached[2]:
+        return cached[0], cached[1]
     db = get_db()
     prev_count, other_protocols = await asyncio.gather(
         db.events.count_documents({"src_ip": ip}),
         db.events.distinct("protocol", {"src_ip": ip, "protocol": {"$nin": [None, protocol]}}),
     )
-    return prev_count, len(other_protocols) > 0
+    result = (prev_count, len(other_protocols) > 0)
+    _ip_check_cache[ip] = (*result, now + _IP_CHECK_TTL)
+    return result
 
 
 def _check_velocity(ip: str) -> bool:
@@ -132,10 +143,14 @@ _SKIP_EVENT_TYPES = {
 async def _cleanup_velocity_cache():
     while True:
         await asyncio.sleep(300)
-        cutoff = time.time() - 60.0
+        now = time.time()
+        cutoff = now - 60.0
         stale = [ip for ip, ts in list(_ip_timestamps.items()) if not any(t > cutoff for t in ts)]
         for ip in stale:
             _ip_timestamps.pop(ip, None)
+        expired = [ip for ip, entry in list(_ip_check_cache.items()) if now > entry[2]]
+        for ip in expired:
+            _ip_check_cache.pop(ip, None)
 
 
 async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
