@@ -57,10 +57,19 @@ async def ensure_indexes():
     cache = get_db().ip_cache
     await cache.create_index([("ip", 1)], unique=True)
     await cache.create_index([("expires_at", 1)], expireAfterSeconds=0)
-    await cache.create_index([("abuse_cached_at", 1)])
-    await cache.create_index([("shodan_cached_at", 1)])
-    await cache.create_index([("shodan_scanned_at", 1)])
-    await cache.create_index([("abuse_data.score", 1)])
+    # Drop non-sparse versions — {$exists:true} queries on non-sparse indexes read
+    # every document to verify the field (brutal on Longhorn network storage).
+    for dead in ("abuse_cached_at_1", "shodan_cached_at_1", "shodan_scanned_at_1", "abuse_data.score_1"):
+        try:
+            await cache.drop_index(dead)
+        except Exception:
+            pass
+    # Sparse: only index IPs where the field actually exists.
+    # {field: {$exists:true}} count queries become fully covered — zero doc reads.
+    await cache.create_index([("abuse_cached_at", 1)], sparse=True)
+    await cache.create_index([("shodan_cached_at", 1)], sparse=True)
+    await cache.create_index([("shodan_scanned_at", 1)], sparse=True)
+    await cache.create_index([("abuse_data.score", 1)], sparse=True)
 
     logger.info("MongoDB indexes ensured")
 

@@ -528,8 +528,10 @@ async def analytics_intelligence():
     db = get_db()
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
 
+    # Match on abuse_data.score (not abuse_data) so the sparse index on
+    # abuse_data.score is used — makes this aggregation index-covered.
     score_dist_pipeline = [
-        {"$match": {"abuse_data": {"$exists": True}}},
+        {"$match": {"abuse_data.score": {"$exists": True}}},
         {"$bucket": {
             "groupBy": "$abuse_data.score",
             "boundaries": [0, 26, 51, 76, 101],
@@ -624,7 +626,8 @@ async def analytics_intelligence():
         "shodan_coverage": {"has_data": shodan_with_data, "no_data": shodan_checked - shodan_with_data},
         "top_orgs": top_orgs,
     }
-    _stats_cache["analytics_intelligence"] = (result, time.monotonic() + 300)
+    # CVE/port/tag distributions change slowly — 30 min cache is fine.
+    _stats_cache["analytics_intelligence"] = (result, time.monotonic() + 1800)
     return result
 
 
