@@ -435,23 +435,31 @@ async def analytics_overview():
     db = get_db()
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    month_start = today_start.replace(day=1)
     today_naive = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     (
         total_events,
         events_today,
+        events_yesterday,
+        known_threats_today,
         unique_ip_r,
         abuse_today,
         shodan_today,
         shodan_total,
+        shodan_this_month,
         threat_count,
         total_checked,
     ) = await asyncio.gather(
         db.events.count_documents({}),
         db.events.count_documents({"_ts": {"$gte": today_start}}),
+        db.events.count_documents({"_ts": {"$gte": yesterday_start, "$lt": today_start}}),
+        db.events.count_documents({"_ts": {"$gte": today_start}, "known_threat": True}),
         db.events.aggregate([{"$group": {"_id": "$src_ip"}}, {"$count": "count"}]).to_list(1),
         db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
+        db.ip_cache.count_documents({"shodan_cached_at": {"$gte": month_start}}),
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
         db.ip_cache.count_documents({"abuse_data": {"$exists": True}}),
     )
@@ -460,10 +468,13 @@ async def analytics_overview():
     result = {
         "total_events": total_events,
         "events_today": events_today,
+        "events_yesterday": events_yesterday,
+        "known_threats_today": known_threats_today,
         "unique_ips": unique_ips,
         "abuse_today": abuse_today,
         "shodan_today": shodan_today,
         "shodan_total": shodan_total,
+        "shodan_this_month": shodan_this_month,
         "threat_rate": threat_rate,
         "total_checked": total_checked,
     }

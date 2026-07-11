@@ -10,12 +10,19 @@ const SECTION = {
   marginBottom: '20px', marginTop: '36px',
 }
 
-function StatCard({ label, value, sub, color = '#4ade80', warn = false }) {
+function StatCard({ label, value, sub, color = '#4ade80', warn = false, trend = null }) {
   return (
     <div style={CARD}>
       <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '2px', marginBottom: '10px' }}>{label}</div>
-      <div style={{ fontSize: '26px', fontWeight: 'bold', color: warn ? '#f97316' : color, marginBottom: '4px' }}>
-        {typeof value === 'number' ? value.toLocaleString() : (value ?? '—')}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ fontSize: '26px', fontWeight: 'bold', color: warn ? '#f97316' : color }}>
+          {typeof value === 'number' ? value.toLocaleString() : (value ?? '—')}
+        </div>
+        {trend && (
+          <span style={{ fontSize: '11px', color: trend.up ? '#4ade80' : '#f87171', flexShrink: 0 }}>
+            {trend.up ? '↑' : '↓'}{trend.pct}%
+          </span>
+        )}
       </div>
       {sub && <div style={{ fontSize: '10px', color: '#475569' }}>{sub}</div>}
     </div>
@@ -48,6 +55,59 @@ function HBarChart({ data, labelKey = 'label', valueKey = 'count', color = '#4ad
   )
 }
 
+function HourlyBarChart({ data }) {
+  const slots = Array.from({ length: 24 }, (_, h) => ({ h, count: 0 }))
+  data.forEach(d => {
+    const h = new Date(d.hour).getUTCHours()
+    if (h >= 0 && h < 24) slots[h].count = d.count
+  })
+  const max = Math.max(...slots.map(s => s.count), 1)
+  const MAX_H = 80
+  const total = slots.reduce((s, x) => s + x.count, 0)
+  const peak = slots.reduce((best, x) => x.count > best.count ? x : best, slots[0])
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '24px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>LAST 24H TOTAL</div>
+          <div style={{ fontSize: '20px', color: '#4ade80', fontWeight: 'bold' }}>{total.toLocaleString()}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>PEAK HOUR (UTC)</div>
+          <div style={{ fontSize: '20px', color: '#f97316', fontWeight: 'bold' }}>{String(peak.h).padStart(2, '0')}:00</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '1px', marginBottom: '4px' }}>PEAK COUNT</div>
+          <div style={{ fontSize: '20px', color: '#ef4444', fontWeight: 'bold' }}>{peak.count.toLocaleString()}</div>
+        </div>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', minWidth: '480px', height: `${MAX_H + 28}px` }}>
+          {slots.map(({ h, count }) => {
+            const barH = count > 0 ? Math.max(2, (count / max) * MAX_H) : 0
+            const isPeak = count === max && count > 0
+            return (
+              <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', width: '100%' }}>
+                  <div
+                    style={{ width: '100%', height: `${barH}px`, background: isPeak ? '#f97316' : '#4ade80', borderRadius: '2px 2px 0 0', opacity: 0.85 }}
+                    title={`${String(h).padStart(2, '0')}:00 UTC — ${count.toLocaleString()} events`}
+                  />
+                </div>
+                <div style={{ height: '1px', background: '#1e2535', width: '100%', marginTop: '4px' }} />
+                <span style={{ fontSize: '8px', color: '#475569', marginTop: '3px' }}>
+                  {h % 6 === 0 ? String(h).padStart(2, '0') : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SensorVBarChart({ sensors, data }) {
   const COLORS = ['#4ade80', '#38bdf8', '#a78bfa', '#fb923c']
   const totals = data.map(d => sensors.reduce((s, hp) => s + (d[hp] || 0), 0))
@@ -76,7 +136,7 @@ function SensorVBarChart({ sensors, data }) {
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', minWidth: `${data.length * 54}px`, paddingBottom: '4px' }}>
-          {data.map((d, i) => (
+          {data.map((d) => (
             <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: '46px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', marginBottom: '6px', justifyContent: 'center' }}>
                 {sensors.map((s, si) => {
@@ -86,12 +146,7 @@ function SensorVBarChart({ sensors, data }) {
                     <div
                       key={s}
                       title={`${s.replace('honeypot-', '')}: ${val.toLocaleString()}`}
-                      style={{
-                        width: '16px', height: `${h}px`,
-                        background: COLORS[si % COLORS.length],
-                        borderRadius: '2px 2px 0 0',
-                        opacity: 0.85,
-                      }}
+                      style={{ width: '16px', height: `${h}px`, background: COLORS[si % COLORS.length], borderRadius: '2px 2px 0 0', opacity: 0.85 }}
                     />
                   )
                 })}
@@ -145,24 +200,15 @@ function StackedVBarChart({ data }) {
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', minWidth: `${data.length * 54}px`, paddingBottom: '4px' }}>
-          {data.map((d, i) => (
+          {data.map((d) => (
             <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: '46px' }}>
-              <div style={{
-                width: '24px', height: `${MAX_H}px`,
-                display: 'flex', flexDirection: 'column-reverse',
-                justifyContent: 'flex-start', overflow: 'hidden',
-                borderRadius: '2px 2px 0 0',
-              }}>
+              <div style={{ width: '24px', height: `${MAX_H}px`, display: 'flex', flexDirection: 'column-reverse', justifyContent: 'flex-start', overflow: 'hidden', borderRadius: '2px 2px 0 0' }}>
                 {SW_CATEGORIES.map(cat => {
                   const val = d[cat] || 0
                   if (!val) return null
                   const h = (val / max) * MAX_H
                   return (
-                    <div
-                      key={cat}
-                      title={`${cat}: ${val.toLocaleString()}`}
-                      style={{ height: `${h}px`, background: SW_COLORS[cat], flexShrink: 0, opacity: 0.85 }}
-                    />
+                    <div key={cat} title={`${cat}: ${val.toLocaleString()}`} style={{ height: `${h}px`, background: SW_COLORS[cat], flexShrink: 0, opacity: 0.85 }} />
                   )
                 })}
               </div>
@@ -185,11 +231,7 @@ function StackedVBarChart({ data }) {
           <thead>
             <tr>
               {['DATE', 'COWRIE', 'OPENCANARY', 'OC %'].map(h => (
-                <th key={h} style={{
-                  textAlign: 'right', color: '#475569', fontSize: '9px',
-                  letterSpacing: '1px', paddingBottom: '8px', paddingRight: '16px',
-                  fontWeight: 'normal',
-                }}>{h}</th>
+                <th key={h} style={{ textAlign: 'right', color: '#475569', fontSize: '9px', letterSpacing: '1px', paddingBottom: '8px', paddingRight: '16px', fontWeight: 'normal' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -325,7 +367,8 @@ const flag = (code) => {
 
 const PROTO_COLOR = {
   ssh: '#fbbf24', http: '#a78bfa', ftp: '#22d3ee',
-  mysql: '#4ade80', redis: '#fb923c', telnet: '#f87171', unknown: '#475569',
+  mysql: '#4ade80', redis: '#fb923c', telnet: '#f87171',
+  mssql: '#14b8a6', rdp: '#ec4899', unknown: '#475569',
 }
 
 function ProtoTag({ proto }) {
@@ -348,13 +391,20 @@ export default function AnalyticsPage({ onBack }) {
   const [pipeline, setPipeline] = useState(null)
   const [sensorDaily, setSensorDaily] = useState(null)
   const [softwareDaily, setSoftwareDaily] = useState(null)
+  const [hourly, setHourly] = useState([])
+  const [credentials, setCredentials] = useState(null)
+  const [commands, setCommands] = useState([])
+  const [httpPaths, setHttpPaths] = useState([])
+  const [redisCmds, setRedisCmds] = useState([])
+  const [vulns, setVulns] = useState([])
+  const [statsData, setStatsData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [ovRes, tlRes, intRes, ipsRes, plRes, sdRes, swRes] = await Promise.all([
+      const responses = await Promise.all([
         fetch('/api/analytics/overview'),
         fetch('/api/analytics/timeline?days=7'),
         fetch('/api/analytics/intelligence'),
@@ -362,8 +412,17 @@ export default function AnalyticsPage({ onBack }) {
         fetch('/api/health/pipeline'),
         fetch('/api/analytics/daily-by-sensor?days=10'),
         fetch('/api/analytics/daily-by-software?days=10'),
+        fetch('/api/stats/hourly'),
+        fetch('/api/stats/credentials'),
+        fetch('/api/stats/commands'),
+        fetch('/api/stats/http-paths'),
+        fetch('/api/stats/redis-commands'),
+        fetch('/api/stats/vulns'),
+        fetch('/api/stats'),
       ])
-      const [ov, tl, int, ip, pl, sd, sw] = await Promise.all([ovRes.json(), tlRes.json(), intRes.json(), ipsRes.json(), plRes.json(), sdRes.json(), swRes.json()])
+      const [ov, tl, int, ip, pl, sd, sw, hr, creds, cmds, paths, redis, vs, st] = await Promise.all(
+        responses.map(r => r.json())
+      )
       setOverview(ov)
       setTimeline(tl)
       setIntelligence(int)
@@ -371,6 +430,13 @@ export default function AnalyticsPage({ onBack }) {
       setPipeline(pl)
       setSensorDaily(sd)
       setSoftwareDaily(sw)
+      setHourly(hr)
+      setCredentials(creds)
+      setCommands(cmds)
+      setHttpPaths(paths)
+      setRedisCmds(redis)
+      setVulns(vs)
+      setStatsData(st)
       setRefreshedAt(new Date())
     } catch (e) {
       console.error('Analytics load failed', e)
@@ -387,13 +453,21 @@ export default function AnalyticsPage({ onBack }) {
   useEffect(() => { load() }, [])
 
   const col2 = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }
+  const col3 = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }
   const SCORE_COLORS = ['#22c55e', '#eab308', '#f97316', '#ef4444']
   const totalScoreChecked = intelligence ? intelligence.score_distribution.reduce((s, b) => s + b.count, 0) : 0
+
+  const trendToday = overview && overview.events_yesterday > 0
+    ? { pct: Math.round(Math.abs((overview.events_today - overview.events_yesterday) / overview.events_yesterday * 100)), up: overview.events_today >= overview.events_yesterday }
+    : null
+
+  const shodanMonthUsed = overview?.shodan_this_month || 0
+  const shodanMonthWarn = shodanMonthUsed >= 80
 
   return (
     <div style={{ background: BG, minHeight: '100vh', color: '#e2e8f0', fontFamily: MONO, padding: isMobile ? '16px' : '24px 32px' }}>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <button onClick={onBack} style={{
@@ -425,19 +499,19 @@ export default function AnalyticsPage({ onBack }) {
         </div>
       ) : (
         <>
-          {/* ── Overview cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: '12px' }}>
+          {/* Overview cards — 4-col desktop, 2-col mobile */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px' }}>
             <StatCard label="TOTAL EVENTS" value={overview?.total_events} sub="all time" />
-            <StatCard label="EVENTS TODAY" value={overview?.events_today} color="#38bdf8" />
+            <StatCard label="EVENTS TODAY" value={overview?.events_today} color="#38bdf8" trend={trendToday} sub="vs yesterday" />
+            <StatCard label="KNOWN THREATS TODAY" value={overview?.known_threats_today} color="#ef4444" sub="intel-flagged IPs" />
             <StatCard label="UNIQUE IPs" value={overview?.unique_ips} sub="all time" color="#a78bfa" />
             <StatCard
               label="ABUSEIPDB TODAY"
               value={overview?.abuse_today}
               warn={(overview?.abuse_today ?? 0) > 800}
               color="#fb923c"
-              sub={`of ${overview?.total_checked?.toLocaleString() ?? '—'} total checked`}
+              sub="checks (1,000/day limit)"
             />
-            <StatCard label="SHODAN CACHED" value={overview?.shodan_total} color="#22d3ee" sub="unique IPs with data" />
             <StatCard
               label="THREAT RATE"
               value={overview ? `${overview.threat_rate}%` : '—'}
@@ -446,13 +520,283 @@ export default function AnalyticsPage({ onBack }) {
             />
           </div>
 
-          {/* ── Attack heatmap ── */}
+          {/* Last 24 hours */}
+          <div style={SECTION}>LAST 24 HOURS</div>
+          <div style={CARD}>
+            {hourly.length > 0 ? <HourlyBarChart data={hourly} /> : <Empty msg="No events in the last 24 hours" />}
+          </div>
+
+          {/* Geographic distribution */}
+          {statsData && (
+            <>
+              <div style={SECTION}>GEOGRAPHIC DISTRIBUTION</div>
+              <div style={col2}>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#4ade80', letterSpacing: '2px', marginBottom: '16px' }}>TOP COUNTRIES</div>
+                  {statsData.top_countries?.length > 0 ? (
+                    <div>
+                      {statsData.top_countries.map(c => {
+                        const max = statsData.top_countries[0].count
+                        const pct = (c.count / max) * 100
+                        return (
+                          <div key={c.country} style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', gap: '8px' }}>
+                              <span style={{ fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                {flag(c.country_code)}{c.country || '—'}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#64748b', flexShrink: 0 }}>{c.count.toLocaleString()}</span>
+                            </div>
+                            <div style={{ height: '4px', background: '#1e2535', borderRadius: '2px' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, background: '#4ade80', borderRadius: '2px' }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : <Empty />}
+                </div>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '2px', marginBottom: '16px' }}>PROTOCOL BREAKDOWN</div>
+                  {statsData.protocol_breakdown?.length > 0 ? (
+                    <div>
+                      {statsData.protocol_breakdown.map(p => {
+                        const max = statsData.protocol_breakdown[0].count
+                        const pct = (p.count / max) * 100
+                        const color = PROTO_COLOR[p.protocol] || '#475569'
+                        return (
+                          <div key={p.protocol} style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                              <span style={{ fontSize: '11px', color }}>
+                                {p.protocol?.toUpperCase() || '—'}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>{p.count.toLocaleString()}</span>
+                            </div>
+                            <div style={{ height: '4px', background: '#1e2535', borderRadius: '2px' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '2px' }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : <Empty />}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Credential intelligence */}
+          {(credentials || commands.length > 0) && (
+            <>
+              <div style={SECTION}>CREDENTIAL INTELLIGENCE</div>
+              <div style={col3}>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#fbbf24', letterSpacing: '2px', marginBottom: '16px' }}>TOP USERNAMES</div>
+                  {credentials?.top_usernames?.length > 0 ? (
+                    <HBarChart data={credentials.top_usernames.map(u => ({ label: u.username, count: u.count }))} color="#fbbf24" />
+                  ) : <Empty msg="No credentials logged yet" />}
+                </div>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#fb923c', letterSpacing: '2px', marginBottom: '16px' }}>TOP PASSWORDS</div>
+                  {credentials?.top_passwords?.length > 0 ? (
+                    <HBarChart data={credentials.top_passwords.map(p => ({ label: p.password, count: p.count }))} color="#fb923c" />
+                  ) : <Empty msg="No passwords logged yet" />}
+                </div>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#f87171', letterSpacing: '2px', marginBottom: '16px' }}>TOP SHELL COMMANDS</div>
+                  {commands.length > 0 ? (
+                    <HBarChart data={commands.map(c => ({ label: c.command, count: c.count }))} color="#f87171" />
+                  ) : <Empty msg="No commands yet — no successful SSH sessions" />}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Attack techniques */}
+          {(vulns.length > 0 || httpPaths.length > 0 || redisCmds.length > 0) && (
+            <>
+              <div style={SECTION}>ATTACK TECHNIQUES</div>
+              <div style={col2}>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#ef4444', letterSpacing: '2px', marginBottom: '16px' }}>PROBE SIGNATURES DETECTED</div>
+                  {vulns.length > 0 ? (
+                    <HBarChart data={vulns.map(v => ({ label: v.label, count: v.count }))} color="#ef4444" />
+                  ) : <Empty msg="No signatures detected yet" />}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={CARD}>
+                    <div style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '2px', marginBottom: '16px' }}>HTTP PATHS PROBED</div>
+                    {httpPaths.length > 0 ? (
+                      <HBarChart data={httpPaths.map(p => ({ label: p.path, count: p.count }))} color="#a78bfa" />
+                    ) : <Empty msg="No HTTP probes yet" />}
+                  </div>
+                  <div style={CARD}>
+                    <div style={{ fontSize: '10px', color: '#14b8a6', letterSpacing: '2px', marginBottom: '16px' }}>REDIS COMMANDS</div>
+                    {redisCmds.length > 0 ? (
+                      <HBarChart data={redisCmds.map(r => ({ label: r.command, count: r.count }))} color="#14b8a6" />
+                    ) : <Empty msg="No Redis commands yet" />}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Attack density heatmap */}
           <div style={SECTION}>ATTACK DENSITY — 7 DAY HEATMAP</div>
           <div style={CARD}>
             <HeatGrid data={timeline} />
           </div>
 
-          {/* ── API usage ── */}
+          {/* Cowrie vs OpenCanary */}
+          {softwareDaily?.data?.length > 0 && (
+            <>
+              <div style={SECTION}>COWRIE vs OPENCANARY — LAST 10 DAYS</div>
+              <div style={CARD}>
+                <StackedVBarChart data={softwareDaily.data} />
+              </div>
+            </>
+          )}
+
+          {/* IP analysis today */}
+          <div style={SECTION}>IP ANALYSIS — TODAY</div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <StatCard label="UNIQUE IPs TODAY" value={ips?.unique_ips_today} color="#4ade80" />
+            <StatCard label="NEW IPs TODAY" value={ips?.new_ips_today} color="#f97316" sub="first time ever seen" />
+            <StatCard label="REPEAT IPs" value={ips?.repeat_ips_today} color="#94a3b8" sub="seen on previous days" />
+            <StatCard label="CACHE HITS" value={ips?.cache_hits_today} color="#22d3ee" sub="no API credit used" />
+          </div>
+
+          {ips && ips.unique_ips_today > 0 && (
+            <div style={{ ...CARD, marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>ABUSEIPDB CACHE HIT RATE TODAY</span>
+                <span style={{ fontSize: '11px', color: '#22d3ee' }}>
+                  {Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%
+                  <span style={{ color: '#475569', marginLeft: '8px' }}>
+                    ({ips.cache_hits_today} cache · {ips.abuse_api_calls_today} API)
+                  </span>
+                </span>
+              </div>
+              <div style={{ height: '8px', background: '#1e2535', borderRadius: '4px' }}>
+                <div style={{
+                  height: '100%', borderRadius: '4px', background: 'linear-gradient(90deg, #22d3ee, #4ade80)',
+                  width: `${Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%`,
+                }} />
+              </div>
+            </div>
+          )}
+
+          {ips?.top_ips_today?.length > 0 && (
+            <div style={CARD}>
+              <div style={{ fontSize: '10px', color: '#4ade80', letterSpacing: '2px', marginBottom: '16px' }}>TOP ATTACKERS TODAY</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'IP', 'COUNTRY', 'ORG / ISP', 'EVENTS', 'PROTOCOLS', 'ABUSE', 'THREAT'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', color: '#475569', fontSize: '9px', letterSpacing: '1px', paddingBottom: '12px', paddingRight: '16px', fontWeight: 'normal' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ips.top_ips_today.map((ip, i) => (
+                      <tr key={ip.ip} style={{ borderTop: '1px solid #1a2535' }}>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#2d3748', width: '28px' }}>{i + 1}</td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#e2e8f0', fontFamily: MONO, fontSize: '11px', whiteSpace: 'nowrap' }}>{ip.ip}</td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                          {flag(ip.country_code)}{ip.country}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#64748b', maxWidth: isMobile ? '80px' : '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ip.org || ip.isp || '—'}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0', color: '#4ade80', fontWeight: 'bold' }}>{ip.count.toLocaleString()}</td>
+                        <td style={{ padding: '8px 16px 8px 0', whiteSpace: 'nowrap' }}>
+                          {(ip.protocols || []).sort().map(p => <ProtoTag key={p} proto={p} />)}
+                        </td>
+                        <td style={{ padding: '8px 16px 8px 0' }}>
+                          <span style={{ color: ip.abuse_score >= 75 ? '#ef4444' : ip.abuse_score >= 50 ? '#f97316' : ip.abuse_score >= 25 ? '#eab308' : '#22c55e', fontWeight: 'bold' }}>
+                            {ip.abuse_score ?? '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 0 8px 0' }}>
+                          {ip.known_threat
+                            ? <span style={{ color: '#ef4444', fontSize: '10px', letterSpacing: '1px' }}>● THREAT</span>
+                            : <span style={{ color: '#1e2535', fontSize: '10px' }}>—</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Shodan intelligence */}
+          <div style={SECTION}>SHODAN INTELLIGENCE</div>
+          <div style={col2}>
+            <div style={CARD}>
+              <div style={{ fontSize: '10px', color: '#f87171', letterSpacing: '2px', marginBottom: '16px' }}>TOP CVEs DETECTED</div>
+              {intelligence?.top_cves?.length > 0 ? (
+                <HBarChart
+                  data={intelligence.top_cves.map(d => ({ label: d.cve, count: d.count }))}
+                  color="#f87171"
+                />
+              ) : <Empty msg="No CVEs — attackers not indexed in Shodan or have no known vulns" />}
+            </div>
+            <div style={CARD}>
+              <div style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '2px', marginBottom: '16px' }}>OPEN PORT LANDSCAPE</div>
+              {intelligence?.top_ports?.length > 0 ? (
+                <HBarChart
+                  data={intelligence.top_ports.map(d => ({ label: `Port ${d.port}`, count: d.count }))}
+                  color="#a78bfa"
+                />
+              ) : <Empty />}
+            </div>
+          </div>
+
+          {/* Top attacker networks */}
+          {intelligence?.top_orgs?.length > 0 && (
+            <>
+              <div style={SECTION}>TOP ATTACKER NETWORKS</div>
+              <div style={CARD}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        {['#', 'ORGANIZATION / HOSTING', 'EVENTS', 'UNIQUE IPs', 'EVT/IP'].map(h => (
+                          <th key={h} style={{ textAlign: 'left', color: '#475569', fontSize: '9px', letterSpacing: '1px', paddingBottom: '12px', paddingRight: '20px', fontWeight: 'normal' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {intelligence.top_orgs.map((org, i) => {
+                        const evtPerIp = org.unique_ips > 0 ? (org.events / org.unique_ips).toFixed(1) : '—'
+                        return (
+                          <tr key={i} style={{ borderTop: '1px solid #1a2535' }}>
+                            <td style={{ padding: '9px 20px 9px 0', color: '#2d3748', width: '32px' }}>{i + 1}</td>
+                            <td style={{ padding: '9px 20px 9px 0', color: '#e2e8f0', maxWidth: isMobile ? '120px' : '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {org.org}
+                            </td>
+                            <td style={{ padding: '9px 20px 9px 0', color: '#4ade80', fontWeight: 'bold' }}>
+                              {org.events.toLocaleString()}
+                            </td>
+                            <td style={{ padding: '9px 20px 9px 0', color: '#94a3b8' }}>
+                              {org.unique_ips.toLocaleString()}
+                            </td>
+                            <td style={{ padding: '9px 0 9px 0', color: '#64748b' }}>
+                              {evtPerIp}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* API usage */}
           <div style={SECTION}>API USAGE — LAST 7 DAYS</div>
           <div style={col2}>
 
@@ -485,6 +829,24 @@ export default function AnalyticsPage({ onBack }) {
             <div style={CARD}>
               <div style={{ fontSize: '10px', color: '#22d3ee', letterSpacing: '2px', marginBottom: '4px' }}>SHODAN</div>
               <div style={{ fontSize: '10px', color: '#475569', marginBottom: '16px' }}>100 credits/month · membership plan</div>
+
+              {/* Monthly credits bar */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>CREDITS USED THIS MONTH</span>
+                  <span style={{ fontSize: '11px', color: shodanMonthWarn ? '#f97316' : '#22d3ee' }}>
+                    {shodanMonthUsed} / 100
+                  </span>
+                </div>
+                <div style={{ height: '6px', background: '#1e2535', borderRadius: '3px' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, shodanMonthUsed)}%`,
+                    background: shodanMonthWarn ? '#f97316' : '#22d3ee',
+                    borderRadius: '3px',
+                  }} />
+                </div>
+              </div>
 
               {/* Coverage */}
               {intelligence?.shodan_coverage && (() => {
@@ -536,150 +898,7 @@ export default function AnalyticsPage({ onBack }) {
             </div>
           </div>
 
-          {/* ── IP analysis ── */}
-          <div style={SECTION}>IP ANALYSIS — TODAY</div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
-            <StatCard label="UNIQUE IPs TODAY" value={ips?.unique_ips_today} color="#4ade80" />
-            <StatCard label="NEW IPs TODAY" value={ips?.new_ips_today} color="#f97316" sub="first time ever seen" />
-            <StatCard label="REPEAT IPs" value={ips?.repeat_ips_today} color="#94a3b8" sub="seen on previous days" />
-            <StatCard label="CACHE HITS" value={ips?.cache_hits_today} color="#22d3ee" sub="no API credit used" />
-          </div>
-
-          {ips && ips.unique_ips_today > 0 && (
-            <div style={{ ...CARD, marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>ABUSEIPDB CACHE HIT RATE TODAY</span>
-                <span style={{ fontSize: '11px', color: '#22d3ee' }}>
-                  {Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%
-                  <span style={{ color: '#475569', marginLeft: '8px' }}>
-                    ({ips.cache_hits_today} served from cache · {ips.abuse_api_calls_today} API calls)
-                  </span>
-                </span>
-              </div>
-              <div style={{ height: '8px', background: '#1e2535', borderRadius: '4px' }}>
-                <div style={{
-                  height: '100%', borderRadius: '4px', background: 'linear-gradient(90deg, #22d3ee, #4ade80)',
-                  width: `${Math.round(ips.cache_hits_today / ips.unique_ips_today * 100)}%`,
-                }} />
-              </div>
-            </div>
-          )}
-
-          {ips?.top_ips_today?.length > 0 && (
-            <div style={CARD}>
-              <div style={{ fontSize: '10px', color: '#4ade80', letterSpacing: '2px', marginBottom: '16px' }}>TOP ATTACKERS TODAY</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                  <thead>
-                    <tr>
-                      {['#', 'IP', 'COUNTRY', 'ORG / ISP', 'EVENTS', 'PROTOCOLS', 'ABUSE', 'THREAT'].map(h => (
-                        <th key={h} style={{
-                          textAlign: 'left', color: '#475569', fontSize: '9px',
-                          letterSpacing: '1px', paddingBottom: '12px', paddingRight: '16px', fontWeight: 'normal',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ips.top_ips_today.map((ip, i) => (
-                      <tr key={ip.ip} style={{ borderTop: '1px solid #1a2535' }}>
-                        <td style={{ padding: '8px 16px 8px 0', color: '#2d3748', width: '28px' }}>{i + 1}</td>
-                        <td style={{ padding: '8px 16px 8px 0', color: '#e2e8f0', fontFamily: MONO, fontSize: '11px', whiteSpace: 'nowrap' }}>{ip.ip}</td>
-                        <td style={{ padding: '8px 16px 8px 0', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                          {flag(ip.country_code)} {ip.country}
-                        </td>
-                        <td style={{ padding: '8px 16px 8px 0', color: '#64748b', maxWidth: isMobile ? '80px' : '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {ip.org || ip.isp || '—'}
-                        </td>
-                        <td style={{ padding: '8px 16px 8px 0', color: '#4ade80', fontWeight: 'bold' }}>{ip.count.toLocaleString()}</td>
-                        <td style={{ padding: '8px 16px 8px 0', whiteSpace: 'nowrap' }}>
-                          {(ip.protocols || []).sort().map(p => <ProtoTag key={p} proto={p} />)}
-                        </td>
-                        <td style={{ padding: '8px 16px 8px 0' }}>
-                          <span style={{ color: ip.abuse_score >= 75 ? '#ef4444' : ip.abuse_score >= 50 ? '#f97316' : ip.abuse_score >= 25 ? '#eab308' : '#22c55e', fontWeight: 'bold' }}>
-                            {ip.abuse_score ?? '—'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 0 8px 0' }}>
-                          {ip.known_threat
-                            ? <span style={{ color: '#ef4444', fontSize: '10px', letterSpacing: '1px' }}>● THREAT</span>
-                            : <span style={{ color: '#1e2535', fontSize: '10px' }}>—</span>
-                          }
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Shodan intelligence ── */}
-          <div style={SECTION}>SHODAN INTELLIGENCE</div>
-          <div style={col2}>
-            <div style={CARD}>
-              <div style={{ fontSize: '10px', color: '#f87171', letterSpacing: '2px', marginBottom: '16px' }}>TOP CVEs DETECTED</div>
-              {intelligence?.top_cves?.length > 0 ? (
-                <HBarChart
-                  data={intelligence.top_cves.map(d => ({ label: d.cve, count: d.count }))}
-                  color="#f87171"
-                />
-              ) : <Empty msg="No CVEs detected yet — attackers aren't indexed in Shodan or have no known vulns" />}
-            </div>
-
-            <div style={CARD}>
-              <div style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '2px', marginBottom: '16px' }}>OPEN PORT LANDSCAPE</div>
-              {intelligence?.top_ports?.length > 0 ? (
-                <HBarChart
-                  data={intelligence.top_ports.map(d => ({ label: `Port ${d.port}`, count: d.count }))}
-                  color="#a78bfa"
-                />
-              ) : <Empty />}
-            </div>
-          </div>
-
-          {/* ── Top attacker networks ── */}
-          {intelligence?.top_orgs?.length > 0 && (
-            <>
-              <div style={SECTION}>TOP ATTACKER NETWORKS</div>
-              <div style={CARD}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                    <thead>
-                      <tr>
-                        {['#', 'ORGANIZATION / HOSTING', 'EVENTS', 'UNIQUE IPs'].map(h => (
-                          <th key={h} style={{
-                            textAlign: 'left', color: '#475569', fontSize: '9px',
-                            letterSpacing: '1px', paddingBottom: '12px', paddingRight: '20px', fontWeight: 'normal',
-                          }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {intelligence.top_orgs.map((org, i) => (
-                        <tr key={i} style={{ borderTop: '1px solid #1a2535' }}>
-                          <td style={{ padding: '9px 20px 9px 0', color: '#2d3748', width: '32px' }}>{i + 1}</td>
-                          <td style={{
-                            padding: '9px 20px 9px 0', color: '#e2e8f0',
-                            maxWidth: isMobile ? '130px' : '320px',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>{org.org}</td>
-                          <td style={{ padding: '9px 20px 9px 0', color: '#4ade80', fontWeight: 'bold' }}>
-                            {org.events.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '9px 0 9px 0', color: '#94a3b8' }}>
-                            {org.unique_ips.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Pipeline Health ── */}
+          {/* Pipeline health */}
           {pipeline && (
             <>
               <div style={SECTION}>PIPELINE HEALTH</div>
@@ -720,17 +939,7 @@ export default function AnalyticsPage({ onBack }) {
             </>
           )}
 
-          {/* ── Daily events by software (Cowrie vs OpenCanary) ── */}
-          {softwareDaily?.data?.length > 0 && (
-            <>
-              <div style={SECTION}>COWRIE vs OPENCANARY — LAST 10 DAYS</div>
-              <div style={CARD}>
-                <StackedVBarChart data={softwareDaily.data} />
-              </div>
-            </>
-          )}
-
-          {/* ── Daily events by sensor VM ── */}
+          {/* Events by VM */}
           {sensorDaily?.data?.length > 0 && (
             <>
               <div style={SECTION}>EVENTS BY VM — LAST 10 DAYS</div>
