@@ -462,7 +462,6 @@ export default function AnalyticsPage({ onBack }) {
     : null
 
   const shodanMonthUsed = overview?.shodan_this_month || 0
-  const shodanMonthWarn = shodanMonthUsed >= 80
 
   return (
     <div style={{ background: BG, minHeight: '100vh', color: '#e2e8f0', fontFamily: MONO, padding: isMobile ? '16px' : '24px 32px' }}>
@@ -830,22 +829,15 @@ export default function AnalyticsPage({ onBack }) {
               <div style={{ fontSize: '10px', color: '#22d3ee', letterSpacing: '2px', marginBottom: '4px' }}>SHODAN</div>
               <div style={{ fontSize: '10px', color: '#475569', marginBottom: '16px' }}>100 credits/month · membership plan</div>
 
-              {/* Monthly credits bar */}
+              {/* Monthly lookup counter */}
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>CREDITS USED THIS MONTH</span>
-                  <span style={{ fontSize: '11px', color: shodanMonthWarn ? '#f97316' : '#22d3ee' }}>
-                    {shodanMonthUsed} / 100
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10px', color: '#475569', letterSpacing: '1px' }}>HOST LOOKUPS THIS MONTH</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#22d3ee' }}>
+                    {shodanMonthUsed.toLocaleString()}
                   </span>
                 </div>
-                <div style={{ height: '6px', background: '#1e2535', borderRadius: '3px' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${Math.min(100, shodanMonthUsed)}%`,
-                    background: shodanMonthWarn ? '#f97316' : '#22d3ee',
-                    borderRadius: '3px',
-                  }} />
-                </div>
+                <div style={{ fontSize: '10px', color: '#2d3748' }}>host lookups are free — no credit cost on membership plan</div>
               </div>
 
               {/* Coverage */}
