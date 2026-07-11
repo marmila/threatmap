@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import close_db, get_db, ensure_indexes
+from db import close_db, get_db, ensure_indexes, backfill_software_org
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _clients: set[WebSocket] = set()
 
 _stats_cache: dict = {}
-_STATS_TTL = 60.0
+_STATS_TTL = 300.0
 
 
 def _cache_get(key: str):
@@ -44,6 +44,7 @@ async def _broadcast(event: dict):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await ensure_indexes()
+    asyncio.create_task(backfill_software_org())
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -85,7 +86,7 @@ async def stats():
     if (cached := _cache_get("stats")) is not None:
         return cached
     db = get_db()
-    total = await db.events.count_documents({})
+    total = await db.events.estimated_document_count()
 
     country_pipeline = [
         {"$group": {"_id": "$src_country", "count": {"$sum": 1}, "country_code": {"$first": "$src_country_code"}}},
@@ -287,13 +288,11 @@ async def daily_stats():
     if (cached := _cache_get("daily")) is not None:
         return cached
     db = get_db()
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    since = datetime.now(timezone.utc) - timedelta(days=7)
     pipeline = [
-        {"$match": {"timestamp": {"$gte": since}}},
-        {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp", "onError": None}}}},
-        {"$match": {"ts": {"$ne": None}}},
+        {"$match": {"_ts": {"$gte": since}}},
         {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%dT00:00:00Z", "date": "$ts"}},
+            "_id": {"$dateToString": {"format": "%Y-%m-%dT00:00:00Z", "date": "$_ts"}},
             "count": {"$sum": 1},
         }},
         {"$sort": {"_id": 1}},
@@ -309,8 +308,9 @@ async def orgs_stats():
     if (cached := _cache_get("orgs")) is not None:
         return cached
     db = get_db()
+    # Use the stored `org` field (set at insert time, backfilled at startup).
+    # Avoids the old $project-before-$match pattern that forced a 400k COLLSCAN.
     pipeline = [
-        {"$project": {"org": {"$ifNull": ["$shodan_org", "$abuse_isp"]}}},
         {"$match": {"org": {"$nin": [None, ""]}}},
         {"$group": {"_id": "$org", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
@@ -441,7 +441,7 @@ async def analytics_overview():
         events_today,
         events_yesterday,
         known_threats_today,
-        unique_ip_r,
+        unique_ip_list,
         abuse_today,
         shodan_today,
         shodan_total,
@@ -450,11 +450,11 @@ async def analytics_overview():
         threat_count,
         total_checked,
     ) = await asyncio.gather(
-        db.events.count_documents({}),
+        db.events.estimated_document_count(),
         db.events.count_documents({"_ts": {"$gte": today_start}}),
         db.events.count_documents({"_ts": {"$gte": yesterday_start, "$lt": today_start}}),
         db.events.count_documents({"_ts": {"$gte": today_start}, "known_threat": True}),
-        db.events.aggregate([{"$group": {"_id": "$src_ip"}}, {"$count": "count"}]).to_list(1),
+        db.events.distinct("src_ip"),
         db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
@@ -463,7 +463,7 @@ async def analytics_overview():
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
         db.ip_cache.count_documents({"abuse_cached_at": {"$exists": True}}),
     )
-    unique_ips = unique_ip_r[0]["count"] if unique_ip_r else 0
+    unique_ips = len(unique_ip_list)
     threat_rate = round(threat_count / total_checked * 100, 1) if total_checked > 0 else 0.0
     result = {
         "total_events": total_events,
@@ -666,20 +666,10 @@ async def analytics_daily_by_software(days: int = 10):
         return cached
     db = get_db()
     since = datetime.now(timezone.utc) - timedelta(days=days)
+    # {_ts, software} compound index makes this index-covered (no doc reads needed).
+    # The software field is stored at insert time and backfilled at startup.
     pipeline = [
-        {"$match": {"_ts": {"$gte": since}}},
-        {"$addFields": {
-            "software": {
-                "$cond": {
-                    "if": {"$regexMatch": {
-                        "input": {"$ifNull": ["$event_type", ""]},
-                        "regex": "^cowrie\\.",
-                    }},
-                    "then": "cowrie",
-                    "else": "opencanary",
-                }
-            }
-        }},
+        {"$match": {"_ts": {"$gte": since}, "software": {"$in": ["cowrie", "opencanary"]}}},
         {"$group": {
             "_id": {
                 "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$_ts"}},

@@ -359,7 +359,12 @@ async def _enrich_opencanary(raw: dict) -> dict | None:
 async def _persist(event: dict):
     try:
         db = get_db()
-        await db.events.insert_one({**event, "_ts": datetime.now(timezone.utc)})
+        software = "cowrie" if event.get("event_type", "").startswith("cowrie.") else "opencanary"
+        org = event.get("shodan_org") or event.get("abuse_isp") or None
+        doc = {**event, "_ts": datetime.now(timezone.utc), "software": software}
+        if org:
+            doc["org"] = org
+        await db.events.insert_one(doc)
     except Exception as e:
         logger.warning(f"MongoDB write failed: {e}")
 
