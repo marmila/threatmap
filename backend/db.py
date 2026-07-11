@@ -35,8 +35,15 @@ async def ensure_indexes():
     await col.create_index([("event_type", 1)])
     # TTL: drop events older than 90 days (_ts is a BSON Date set at insert time)
     await col.create_index([("_ts", 1)], expireAfterSeconds=90 * 24 * 3600)
+    # compound index for known_threats_today: {_ts, known_threat} avoids full doc scan
+    await col.create_index([("_ts", 1), ("known_threat", 1)])
     # ip_cache collection: AbuseIPDB + Shodan results persisted across restarts
     cache = get_db().ip_cache
     await cache.create_index([("ip", 1)], unique=True)
     await cache.create_index([("expires_at", 1)], expireAfterSeconds=0)
+    # analytics queries — all were doing COLLSCAN without these
+    await cache.create_index([("abuse_cached_at", 1)])
+    await cache.create_index([("shodan_cached_at", 1)])
+    await cache.create_index([("shodan_scanned_at", 1)])
+    await cache.create_index([("abuse_data.score", 1)])
     logger.info("MongoDB indexes ensured")

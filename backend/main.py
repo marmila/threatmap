@@ -327,13 +327,11 @@ async def hourly_stats():
     if (cached := _cache_get("hourly")) is not None:
         return cached
     db = get_db()
-    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
     pipeline = [
-        {"$match": {"timestamp": {"$gte": since}}},
-        {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp", "onError": None}}}},
-        {"$match": {"ts": {"$ne": None}}},
+        {"$match": {"_ts": {"$gte": since}}},
         {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%dT%H:00:00Z", "date": "$ts"}},
+            "_id": {"$dateToString": {"format": "%Y-%m-%dT%H:00:00Z", "date": "$_ts"}},
             "count": {"$sum": 1},
         }},
         {"$sort": {"_id": 1}},
@@ -463,7 +461,7 @@ async def analytics_overview():
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": month_start}}),
         db.ip_cache.count_documents({"shodan_scanned_at": {"$gte": month_start}}),
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
-        db.ip_cache.count_documents({"abuse_data": {"$exists": True}}),
+        db.ip_cache.count_documents({"abuse_cached_at": {"$exists": True}}),
     )
     unique_ips = unique_ip_r[0]["count"] if unique_ip_r else 0
     threat_rate = round(threat_count / total_checked * 100, 1) if total_checked > 0 else 0.0
