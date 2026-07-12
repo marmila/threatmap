@@ -28,6 +28,17 @@ _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for v
 _ip_check_cache: dict[str, tuple[int, bool, float]] = {}  # ip -> (prev_count, is_multi, expires_at)
 _IP_CHECK_TTL = 300.0
 
+# In-memory counter buffer — flushed to MongoDB every 30s instead of on every insert.
+# Prevents write lock contention when 8 workers simultaneously $inc the same 3 docs.
+_counter_buf: dict[str, dict[str, int]] = {
+    "protocol_counts": {},
+    "honeypot_counts": {},
+    "event_type_counts": {},
+    "org_counts": {},
+}
+_counter_lock = asyncio.Lock()
+_COUNTER_FLUSH_INTERVAL = 30.0
+
 VULN_SIGNATURES = [
     # CVE tier — unambiguous exploit payload signatures
     {"pattern": r"\$\{jndi:", "fields": ["path", "command"], "label": "Log4Shell", "cve": "CVE-2021-44228", "tier": "cve"},
@@ -168,6 +179,7 @@ async def start_kafka_consumer(broadcast: Callable[[dict], Awaitable[None]]):
     for _ in range(ENRICHMENT_WORKERS):
         asyncio.create_task(_enrichment_worker(queue, broadcast))
     asyncio.create_task(_cleanup_velocity_cache())
+    asyncio.create_task(_flush_counters())
 
     await loop.run_in_executor(None, _consume_loop, queue, loop)
 
@@ -379,6 +391,72 @@ async def _enrich_opencanary(raw: dict) -> dict | None:
     }
 
 
+def _buffer_counters(event: dict):
+    protocol = event.get("protocol") or "unknown"
+    honeypot = event.get("honeypot") or "unknown"
+    event_type_key = (event.get("event_type") or "unknown").replace(".", "|")
+    org = event.get("shodan_org") or event.get("abuse_isp") or None
+
+    buf = _counter_buf
+    buf["protocol_counts"][protocol] = buf["protocol_counts"].get(protocol, 0) + 1
+    hp = buf["honeypot_counts"].setdefault(honeypot, {})
+    hp["total"] = hp.get("total", 0) + 1
+    hp[protocol] = hp.get(protocol, 0) + 1
+    buf["event_type_counts"][event_type_key] = buf["event_type_counts"].get(event_type_key, 0) + 1
+    if org:
+        org_key = org.replace(".", "|")
+        buf["org_counts"][org_key] = buf["org_counts"].get(org_key, 0) + 1
+
+
+async def _flush_counters():
+    while True:
+        await asyncio.sleep(_COUNTER_FLUSH_INTERVAL)
+        async with _counter_lock:
+            proto = dict(_counter_buf["protocol_counts"])
+            hp = {k: dict(v) for k, v in _counter_buf["honeypot_counts"].items()}
+            et = dict(_counter_buf["event_type_counts"])
+            org = dict(_counter_buf["org_counts"])
+            _counter_buf["protocol_counts"].clear()
+            _counter_buf["honeypot_counts"].clear()
+            _counter_buf["event_type_counts"].clear()
+            _counter_buf["org_counts"].clear()
+
+        if not any([proto, hp, et, org]):
+            continue
+
+        db = get_db()
+        ops = []
+        if proto:
+            ops.append(db.stats.update_one(
+                {"_id": "protocol_counts"},
+                {"$inc": {f"counts.{k}": v for k, v in proto.items()}},
+                upsert=True,
+            ))
+        if et:
+            ops.append(db.stats.update_one(
+                {"_id": "event_type_counts"},
+                {"$inc": {f"counts.{k}": v for k, v in et.items()}},
+                upsert=True,
+            ))
+        if org:
+            ops.append(db.stats.update_one(
+                {"_id": "org_counts"},
+                {"$inc": {f"counts.{k}": v for k, v in org.items()}},
+                upsert=True,
+            ))
+        for honeypot_name, counts in hp.items():
+            inc = {f"counts.{honeypot_name}.{k}": v for k, v in counts.items()}
+            ops.append(db.stats.update_one(
+                {"_id": "honeypot_counts"},
+                {"$inc": inc},
+                upsert=True,
+            ))
+        try:
+            await asyncio.gather(*ops)
+        except Exception as e:
+            logger.warning(f"Counter flush failed: {e}")
+
+
 async def _persist(event: dict):
     try:
         db = get_db()
@@ -387,30 +465,9 @@ async def _persist(event: dict):
         doc = {**event, "_ts": datetime.now(timezone.utc), "software": software}
         if org:
             doc["org"] = org
-
-        protocol = event.get("protocol") or "unknown"
-        honeypot = event.get("honeypot") or "unknown"
-        # Replace dots with | — MongoDB interprets dots as nested path separators in $inc keys.
-        event_type_key = (event.get("event_type") or "unknown").replace(".", "|")
-
-        await asyncio.gather(
-            db.events.insert_one(doc),
-            db.stats.update_one(
-                {"_id": "protocol_counts"},
-                {"$inc": {f"counts.{protocol}": 1}},
-                upsert=True,
-            ),
-            db.stats.update_one(
-                {"_id": "honeypot_counts"},
-                {"$inc": {f"counts.{honeypot}.total": 1, f"counts.{honeypot}.{protocol}": 1}},
-                upsert=True,
-            ),
-            db.stats.update_one(
-                {"_id": "event_type_counts"},
-                {"$inc": {f"counts.{event_type_key}": 1}},
-                upsert=True,
-            ),
-        )
+        async with _counter_lock:
+            _buffer_counters(event)
+        await db.events.insert_one(doc)
     except Exception as e:
         logger.warning(f"MongoDB write failed: {e}")
 

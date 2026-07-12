@@ -337,25 +337,26 @@ async def orgs_stats():
     if (cached := _cache_get("orgs")) is not None:
         return cached
     db = get_db()
-    # $match on the source fields first (indexable) then project org via $ifNull.
-    # For docs that already have the stored org field it uses that; for old docs not yet
-    # backfilled it derives it on the fly. After backfill the {org:1} index kicks in.
-    pipeline = [
-        {"$match": {"$or": [
-            {"org": {"$nin": [None, ""]}},
-            {"shodan_org": {"$nin": [None, ""]}},
-            {"abuse_isp": {"$nin": [None, ""]}},
-        ]}},
-        {"$project": {
-            "_org": {"$ifNull": ["$org", {"$ifNull": ["$shodan_org", "$abuse_isp"]}]}
-        }},
-        {"$match": {"_org": {"$nin": [None, ""]}}},
-        {"$group": {"_id": "$_org", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 10},
-        {"$project": {"org": "$_id", "count": 1, "_id": 0}},
-    ]
-    result = await db.events.aggregate(pipeline).to_list(10)
+    org_doc = await db.stats.find_one({"_id": "org_counts"})
+    if org_doc:
+        result = sorted(
+            [{"org": k.replace("|", "."), "count": v} for k, v in org_doc["counts"].items()],
+            key=lambda x: -x["count"],
+        )[:10]
+    else:
+        result = await db.events.aggregate([
+            {"$match": {"$or": [
+                {"org": {"$nin": [None, ""]}},
+                {"shodan_org": {"$nin": [None, ""]}},
+                {"abuse_isp": {"$nin": [None, ""]}},
+            ]}},
+            {"$project": {"_org": {"$ifNull": ["$org", {"$ifNull": ["$shodan_org", "$abuse_isp"]}]}}},
+            {"$match": {"_org": {"$nin": [None, ""]}}},
+            {"$group": {"_id": "$_org", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10},
+            {"$project": {"org": "$_id", "count": 1, "_id": 0}},
+        ]).to_list(10)
     _cache_set("orgs", result)
     return result
 
