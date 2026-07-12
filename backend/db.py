@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import motor.motor_asyncio
 import os
@@ -72,6 +73,51 @@ async def ensure_indexes():
     await cache.create_index([("abuse_data.score", 1)], sparse=True)
 
     logger.info("MongoDB indexes ensured")
+
+
+async def backfill_stats_counters():
+    """Initialize materialized counters in the stats collection from existing events.
+
+    Skipped if counters already exist (pod restarts, data persists in MongoDB).
+    After init, _persist() keeps them updated via $inc — no more full-collection scans.
+    """
+    stats_col = get_db().stats
+    existing = await stats_col.count_documents(
+        {"_id": {"$in": ["protocol_counts", "honeypot_counts", "event_type_counts"]}}
+    )
+    if existing == 3:
+        logger.info("Stats counters already initialized, skipping backfill")
+        return
+
+    col = get_db().events
+    logger.info("Initializing stats counters from existing events (one-time)...")
+
+    protocol_agg, honeypot_agg, event_type_agg = await asyncio.gather(
+        col.aggregate([{"$group": {"_id": "$protocol", "count": {"$sum": 1}}}]).to_list(None),
+        col.aggregate([{"$group": {"_id": {"honeypot": "$honeypot", "protocol": "$protocol"}, "count": {"$sum": 1}}}]).to_list(None),
+        col.aggregate([{"$group": {"_id": "$event_type", "count": {"$sum": 1}}}]).to_list(None),
+    )
+
+    protocol_counts = {(r["_id"] or "unknown"): r["count"] for r in protocol_agg}
+
+    honeypot_counts: dict = {}
+    for r in honeypot_agg:
+        hp = r["_id"]["honeypot"] or "unknown"
+        proto = r["_id"]["protocol"] or "unknown"
+        if hp not in honeypot_counts:
+            honeypot_counts[hp] = {"total": 0}
+        honeypot_counts[hp]["total"] += r["count"]
+        honeypot_counts[hp][proto] = r["count"]
+
+    # Replace dots with | so MongoDB doesn't interpret event_type keys as nested paths.
+    event_type_counts = {(r["_id"] or "unknown").replace(".", "|"): r["count"] for r in event_type_agg}
+
+    await asyncio.gather(
+        stats_col.update_one({"_id": "protocol_counts"}, {"$set": {"counts": protocol_counts}}, upsert=True),
+        stats_col.update_one({"_id": "honeypot_counts"}, {"$set": {"counts": honeypot_counts}}, upsert=True),
+        stats_col.update_one({"_id": "event_type_counts"}, {"$set": {"counts": event_type_counts}}, upsert=True),
+    )
+    logger.info("Stats counters initialized")
 
 
 async def backfill_software_org():

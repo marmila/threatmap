@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import close_db, get_db, ensure_indexes, backfill_software_org
+from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller
 
@@ -54,6 +54,7 @@ async def _run_backfill():
 async def lifespan(app: FastAPI):
     await ensure_indexes()
     asyncio.create_task(_run_backfill())
+    asyncio.create_task(backfill_stats_counters())
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -115,52 +116,71 @@ async def stats():
         {"$limit": 10},
         {"$project": {"ip": "$_id", "count": 1, "country": 1, "country_code": 1, "known_threat": 1, "_id": 0}},
     ]
-    protocol_pipeline = [
-        {"$group": {"_id": "$protocol", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$project": {"protocol": "$_id", "count": 1, "_id": 0}},
-    ]
-    honeypot_pipeline = [
-        {"$group": {
-            "_id": {"honeypot": "$honeypot", "protocol": "$protocol"},
-            "count": {"$sum": 1},
-        }},
-        {"$group": {
-            "_id": "$_id.honeypot",
-            "count": {"$sum": "$count"},
-            "protocols": {"$push": {"protocol": "$_id.protocol", "count": "$count"}},
-        }},
-        {"$sort": {"count": -1}},
-        {"$project": {"honeypot": "$_id", "count": 1, "protocols": 1, "_id": 0}},
-    ]
     unique_ip_pipeline = [
         {"$group": {"_id": "$src_ip"}},
         {"$count": "count"},
     ]
-    _noise = [
+    _noise = {
         "cowrie.session.connect", "cowrie.session.closed", "cowrie.session.params",
         "cowrie.client.kex", "cowrie.client.version", "cowrie.client.lex",
         "cowrie.client.size", "cowrie.client.var", "cowrie.client.fingerprint",
         "cowrie.log.closed", "cowrie.direct-tcpip.request",
         "cowrie.direct-tcpip.data", "cowrie.direct-tcpip.ja4h",
-    ]
-    event_type_pipeline = [
-        {"$match": {"event_type": {"$nin": [None, ""] + _noise}}},
-        {"$group": {"_id": "$event_type", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 10},
-        {"$project": {"event_type": "$_id", "count": 1, "_id": 0}},
-    ]
+    }
 
-    top_countries, top_ips, protocol_breakdown, honeypot_breakdown, event_type_breakdown, unique_ip_result = await asyncio.gather(
+    top_countries, top_ips, unique_ip_result, protocol_doc, honeypot_doc, event_type_doc = await asyncio.gather(
         db.events.aggregate(country_pipeline).to_list(10),
         db.events.aggregate(ip_pipeline).to_list(10),
-        db.events.aggregate(protocol_pipeline).to_list(10),
-        db.events.aggregate(honeypot_pipeline).to_list(20),
-        db.events.aggregate(event_type_pipeline).to_list(10),
         db.events.aggregate(unique_ip_pipeline).to_list(1),
+        db.stats.find_one({"_id": "protocol_counts"}),
+        db.stats.find_one({"_id": "honeypot_counts"}),
+        db.stats.find_one({"_id": "event_type_counts"}),
     )
     unique_ips = unique_ip_result[0]["count"] if unique_ip_result else 0
+
+    # Protocol breakdown — O(1) read from materialized counter.
+    if protocol_doc:
+        protocol_breakdown = sorted(
+            [{"protocol": k, "count": v} for k, v in protocol_doc["counts"].items()],
+            key=lambda x: -x["count"],
+        )
+    else:
+        protocol_breakdown = await db.events.aggregate([
+            {"$group": {"_id": "$protocol", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$project": {"protocol": "$_id", "count": 1, "_id": 0}},
+        ]).to_list(10)
+
+    # Honeypot breakdown — O(1) read from materialized counter.
+    if honeypot_doc:
+        honeypot_breakdown = []
+        for hp, data in sorted(honeypot_doc["counts"].items(), key=lambda x: -x[1].get("total", 0)):
+            protocols = [{"protocol": k, "count": v} for k, v in data.items() if k != "total"]
+            honeypot_breakdown.append({"honeypot": hp, "count": data.get("total", 0), "protocols": protocols})
+    else:
+        honeypot_breakdown = await db.events.aggregate([
+            {"$group": {"_id": {"honeypot": "$honeypot", "protocol": "$protocol"}, "count": {"$sum": 1}}},
+            {"$group": {"_id": "$_id.honeypot", "count": {"$sum": "$count"}, "protocols": {"$push": {"protocol": "$_id.protocol", "count": "$count"}}}},
+            {"$sort": {"count": -1}},
+            {"$project": {"honeypot": "$_id", "count": 1, "protocols": 1, "_id": 0}},
+        ]).to_list(20)
+
+    # Event type breakdown — O(1) read from materialized counter.
+    if event_type_doc:
+        event_type_breakdown = sorted(
+            [{"event_type": k.replace("|", "."), "count": v}
+             for k, v in event_type_doc["counts"].items()
+             if k.replace("|", ".") not in _noise and k not in {"unknown", ""}],
+            key=lambda x: -x["count"],
+        )[:10]
+    else:
+        event_type_breakdown = await db.events.aggregate([
+            {"$match": {"event_type": {"$nin": [None, ""] + list(_noise)}}},
+            {"$group": {"_id": "$event_type", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10},
+            {"$project": {"event_type": "$_id", "count": 1, "_id": 0}},
+        ]).to_list(10)
     result = {
         "total": total,
         "unique_ips": unique_ips,

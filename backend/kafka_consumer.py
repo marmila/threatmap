@@ -387,7 +387,30 @@ async def _persist(event: dict):
         doc = {**event, "_ts": datetime.now(timezone.utc), "software": software}
         if org:
             doc["org"] = org
-        await db.events.insert_one(doc)
+
+        protocol = event.get("protocol") or "unknown"
+        honeypot = event.get("honeypot") or "unknown"
+        # Replace dots with | — MongoDB interprets dots as nested path separators in $inc keys.
+        event_type_key = (event.get("event_type") or "unknown").replace(".", "|")
+
+        await asyncio.gather(
+            db.events.insert_one(doc),
+            db.stats.update_one(
+                {"_id": "protocol_counts"},
+                {"$inc": {f"counts.{protocol}": 1}},
+                upsert=True,
+            ),
+            db.stats.update_one(
+                {"_id": "honeypot_counts"},
+                {"$inc": {f"counts.{honeypot}.total": 1, f"counts.{honeypot}.{protocol}": 1}},
+                upsert=True,
+            ),
+            db.stats.update_one(
+                {"_id": "event_type_counts"},
+                {"$inc": {f"counts.{event_type_key}": 1}},
+                upsert=True,
+            ),
+        )
     except Exception as e:
         logger.warning(f"MongoDB write failed: {e}")
 
