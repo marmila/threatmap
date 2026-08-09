@@ -26,7 +26,7 @@ kubectl rollout status deployment/threatmap-backend -n $NS
 ### 2. Dump to a local file
 
 ```bash
-BACKUP="threatmap-$(date +%Y%m%d-%H%M%S).archive.gz"
+BACKUP="$HOME/threatmap-$(date +%Y%m%d-%H%M%S).archive.gz"
 
 kubectl exec -n $NS mongodb-0 -c mongod -- \
   mongodump --uri="$URI" --archive --gzip > $BACKUP
@@ -45,6 +45,8 @@ ls -lh $BACKUP
 ```
 
 > Expected size: ~58MB compressed for ~460k events + ip_cache.
+
+> **Never save to `/tmp`** — it is wiped on every reboot. Always use `$HOME`.
 
 ---
 
