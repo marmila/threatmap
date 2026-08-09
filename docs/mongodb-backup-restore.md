@@ -46,7 +46,6 @@ ls -lh $BACKUP
 
 > Expected size: ~58MB compressed for ~460k events + ip_cache.
 
-> **Never save to `/tmp`** — it is wiped on every reboot. Always use `$HOME`.
 
 ---
 
