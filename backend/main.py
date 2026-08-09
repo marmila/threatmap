@@ -84,10 +84,13 @@ async def ws_endpoint(websocket: WebSocket):
 
 @app.get("/api/events/recent")
 async def recent_events(limit: int = 200):
+    if (cached := _cache_get("recent")) is not None:
+        return cached
     db = get_db()
     events = await db.events.find(
         {}, {"_id": 0, "_ts": 0}
-    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    ).sort("_ts", -1).limit(limit).to_list(limit)
+    _stats_cache["recent"] = (events, time.monotonic() + 10)
     return events
 
 
