@@ -137,7 +137,12 @@ export default function App() {
         setCredentialsData(creds || { top_usernames: [], top_passwords: [] })
         setCommandsData(cmds || [])
         setLiveEvents(events.slice(0, 50))
-        setArcs(events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` })))
+        const histArcs = events.slice(0, 100).map((e) => ({ ...e, id: `hist-${Math.random()}` }))
+        setArcs(histArcs)
+        histArcs.forEach((a) => {
+          const t = setTimeout(() => setArcs((prev) => prev.filter((x) => x.id !== a.id)), 30000)
+          arcTimers.current.push(t)
+        })
       } catch {}
     }
     load()
