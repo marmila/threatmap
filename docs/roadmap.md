@@ -10,6 +10,7 @@ Backlog of planned improvements, grouped by area.
 - **Daily digest** — automated morning message: yesterday's event count, unique IPs, top country, known threat hits, AbuseIPDB quota used. Single Telegram message, cron-triggered or backend-scheduled.
 - **Honeypot health alert** — if no events arrive in N minutes, send an alert; detects Fluent-Bit crash, WireGuard drop, or Kafka issue silently killing the pipeline.
 - **Quota warning** — alert when AbuseIPDB checks exceed 800/day so you can react before hitting the wall.
+- **In-app live threat toasts** — when a WebSocket event has `known_threat=true` or `abuse_score >= 80`, flash a toast in the UI with IP, country, event type, and abuse score; pure frontend, no backend work; makes the dashboard feel alive without needing Telegram open.
 
 ---
 
@@ -63,6 +64,7 @@ Each needs: OCI ingress rule, iptables rule, OpenCanary config key, `_OPENCANARY
 
 ## Globe & Visualization
 
+- **Mobile flat map** — on small screens replace the 3D globe with a flat world map (deck.gl or SVG); the globe is hard to interact with on touch; data layer stays identical, renderer swaps based on viewport; required for mobile usability.
 - **Multi-protocol attacker journey** — for an IP that hits more than one protocol in the same session window, show the sequence on the globe (port 22 → port 80 → port 3389); illustrates reconnaissance patterns vs targeted attacks
 - **ASN attack bubble chart** — replace or complement the top orgs table with a bubble chart where bubble size = event volume from that ASN; click to drill into IPs from that network; makes network-level attack patterns immediately visual
 - **Heatmap overlay** — attack density glow on countries, togglable layer on the 3D globe

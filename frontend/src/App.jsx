@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import GlobeMap from './components/GlobeMap.jsx'
 import StatsPanel from './components/StatsPanel.jsx'
 import AnalyticsPage from './components/AnalyticsPage.jsx'
+import { ToastContainer, useThreatToasts } from './components/ThreatToast.jsx'
 import { useWebSocket } from './hooks/useWebSocket.js'
 import { useWindowSize } from './hooks/useWindowSize.js'
 
@@ -64,6 +65,7 @@ export default function App() {
   const [orgsData, setOrgsData] = useState([])
   const [vulnsData, setVulnsData] = useState([])
   const arcTimers = useRef([])
+  const { toasts, push: pushToast, dismiss: dismissToast } = useThreatToasts()
 
   const handleEvent = useCallback((event) => {
     const arc = { ...event, id: `${Date.now()}-${Math.random()}` }
@@ -75,6 +77,7 @@ export default function App() {
 
     setLiveEvents((prev) => [event, ...prev].slice(0, 50))
     setTotal((n) => n + 1)
+    pushToast(event)
     setTopCountries((prev) => {
       const map = Object.fromEntries(prev.map((c) => [c.country, c.count]))
       const key = event.src_country || 'Unknown'
@@ -193,6 +196,7 @@ export default function App() {
   return (
     <>
       <GlobeMap arcs={arcs} />
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       {!isMobile && <Legend />}
       <button
         onClick={() => setPage('analytics')}
