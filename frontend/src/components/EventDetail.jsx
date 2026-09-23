@@ -187,10 +187,13 @@ export default function EventDetail({ event, onClose }) {
             value={event.src_ip}
             valueStyle={s.ip}
           />
-          <Row label="COUNTRY" value={event.src_country_code
-            ? `${flag(event.src_country_code)} ${event.src_country} (${event.src_country_code})`
-            : event.src_country}
-          />
+          <div style={s.row}>
+            <span style={s.key}>COUNTRY</span>
+            <span style={s.val}>
+              {event.src_country_code && flag(event.src_country_code)}
+              {event.src_country || '—'}{event.src_country_code ? ` (${event.src_country_code})` : ''}
+            </span>
+          </div>
           <Row label="CITY" value={event.src_city} />
           <Row label="COORDS" value={
             event.src_lat != null
