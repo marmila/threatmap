@@ -389,24 +389,44 @@ async def start_threat_poller():
         await asyncio.sleep(300)
 
 
+_otx_full_loaded = False
+
+
 async def _refresh():
+    global _otx_full_loaded
     ips: dict[str, str] = {}
-    since = (datetime.utcnow() - timedelta(days=1)).isoformat()
 
     async with httpx.AsyncClient(timeout=30) as client:
         if OTX_API_KEY:
             try:
-                r = await client.get(
-                    f"{OTX_BASE}/pulses/subscribed",
-                    headers={"X-OTX-API-KEY": OTX_API_KEY},
-                    params={"limit": 20, "modified_since": since},
-                )
-                if r.status_code == 200:
-                    for pulse in r.json().get("results", []):
+                # First run: load all subscribed pulses with no time filter
+                # Subsequent runs: only fetch pulses modified in last 5 minutes (poll interval)
+                params: dict = {"limit": 50}
+                if _otx_full_loaded:
+                    params["modified_since"] = (datetime.utcnow() - timedelta(minutes=6)).isoformat()
+
+                url: str | None = f"{OTX_BASE}/pulses/subscribed"
+                pages = 0
+                while url and pages < 20:
+                    r = await client.get(
+                        url,
+                        headers={"X-OTX-API-KEY": OTX_API_KEY},
+                        params=params if pages == 0 else None,
+                    )
+                    if r.status_code != 200:
+                        break
+                    data = r.json()
+                    for pulse in data.get("results", []):
                         pulse_name = pulse.get("name", "OTX")
                         for ind in pulse.get("indicators", []):
                             if ind.get("type") == "IPv4":
                                 ips.setdefault(ind["indicator"], pulse_name)
+                    url = data.get("next")
+                    pages += 1
+
+                if not _otx_full_loaded:
+                    _otx_full_loaded = True
+                    logger.info(f"OTX full load complete: {len(ips)} IPs from subscribed pulses")
             except Exception as e:
                 logger.warning(f"OTX fetch failed: {e}")
 
