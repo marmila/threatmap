@@ -289,6 +289,27 @@ export default function EventDetail({ event, onClose }) {
           </div>
         )}
 
+        {/* OTX INTEL — only when threat_source is an OTX pulse (not AbuseIPDB) */}
+        {event.known_threat && event.threat_source && event.threat_source !== 'AbuseIPDB' && (
+          <div style={s.section}>
+            <div style={{ ...s.sectionLabel, color: '#a78bfa' }}>OTX INTEL</div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 10px', borderRadius: '5px', marginBottom: '8px',
+              background: '#1e1b4b', border: '1px solid #4c1d95',
+            }}>
+              <span style={{ color: '#a78bfa', fontSize: '10px', fontWeight: 'bold', letterSpacing: '1px' }}>◉ PULSE</span>
+              <span style={{ color: '#e2e8f0', fontSize: '10px', flex: 1, wordBreak: 'break-word' }}>{event.threat_source}</span>
+            </div>
+            <LinkRow
+              label="OTX LOOKUP"
+              href={`https://otx.alienvault.com/indicator/ip/${event.src_ip}`}
+              value={event.src_ip}
+              valueStyle={{ color: '#a78bfa', fontSize: '10px', textAlign: 'right' }}
+            />
+          </div>
+        )}
+
         {/* THREAT INTEL */}
         {(hasAbuseData || event.known_threat) && (
           <div style={s.section}>
