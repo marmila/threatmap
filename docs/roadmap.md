@@ -36,6 +36,13 @@ Each needs: OCI ingress rule, iptables rule, OpenCanary config key, `_OPENCANARY
 
 ---
 
+## Security
+
+- **Ingress Basic Auth** — add HTTP Basic Auth at the ingress level (one nginx annotation + a k8s Secret); zero app code changes; blocks unauthenticated access to `/api/*` and the frontend; quick win before any public exposure.
+- **Keycloak OIDC** — proper SSO via the existing Keycloak instance; protect the frontend and proxy API requests through an auth-aware ingress (oauth2-proxy or NGINX OIDC module); right long-term answer if the dashboard is ever shared or made public.
+
+---
+
 ## Infrastructure
 
 - **Third VM in different region** (US East or Asia Pacific) — different attacker populations and timing patterns; adds a third arc origin on the globe; exposes geographic targeting differences
