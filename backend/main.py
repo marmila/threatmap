@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _clients: set[WebSocket] = set()
 
 _stats_cache: dict = {}
-_STATS_TTL = 300.0
+_STATS_TTL = 900.0
 
 
 def _cache_get(key: str):

@@ -54,6 +54,11 @@ async def ensure_indexes():
     await col.create_index([("username", 1)])
     await col.create_index([("password", 1)])
     await col.create_index([("shodan_org", 1)])
+    # Covering indexes for top_ips and top_countries aggregations — avoids COLLSCAN+doc reads
+    # on 853K+ events collection. All fields needed by each pipeline are in the index,
+    # so MongoDB does an index-only scan with no document fetches.
+    await col.create_index([("src_ip", 1), ("src_country", 1), ("src_country_code", 1), ("known_threat", 1)])
+    await col.create_index([("src_country", 1), ("src_country_code", 1)])
 
     cache = get_db().ip_cache
     await cache.create_index([("ip", 1)], unique=True)
