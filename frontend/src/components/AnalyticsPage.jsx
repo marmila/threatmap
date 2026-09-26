@@ -398,6 +398,7 @@ export default function AnalyticsPage({ onBack }) {
   const [redisCmds, setRedisCmds] = useState([])
   const [vulns, setVulns] = useState([])
   const [statsData, setStatsData] = useState(null)
+  const [threatFeed, setThreatFeed] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
@@ -419,8 +420,9 @@ export default function AnalyticsPage({ onBack }) {
         fetch('/api/stats/redis-commands'),
         fetch('/api/stats/vulns'),
         fetch('/api/stats'),
+        fetch('/api/threat-feed'),
       ])
-      const [ov, tl, int, ip, pl, sd, sw, hr, creds, cmds, paths, redis, vs, st] = await Promise.all(
+      const [ov, tl, int, ip, pl, sd, sw, hr, creds, cmds, paths, redis, vs, st, tf] = await Promise.all(
         responses.map(r => r.json())
       )
       setOverview(ov)
@@ -437,6 +439,7 @@ export default function AnalyticsPage({ onBack }) {
       setRedisCmds(redis)
       setVulns(vs)
       setStatsData(st)
+      setThreatFeed(tf)
       setRefreshedAt(new Date())
     } catch (e) {
       console.error('Analytics load failed', e)
@@ -907,6 +910,69 @@ export default function AnalyticsPage({ onBack }) {
               )}
             </div>
           </div>
+
+          {/* Threat intel feeds */}
+          {threatFeed && (
+            <>
+              <div style={SECTION}>THREAT INTEL FEEDS</div>
+              <div style={col2}>
+                <div style={CARD}>
+                  <div style={{ fontSize: '9px', color: '#475569', letterSpacing: '2px', marginBottom: '10px' }}>MONITORED IPs</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#a78bfa', marginBottom: '4px' }}>
+                    {threatFeed.total.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#475569' }}>IPs loaded in memory from active feeds</div>
+                  <div style={{ marginTop: '20px', fontSize: '10px', color: '#475569', letterSpacing: '1px', marginBottom: '10px' }}>FEED STATUS</div>
+                  {threatFeed.by_source.length === 0 ? (
+                    <div style={{ fontSize: '11px', color: '#2d3748' }}>No feeds loaded yet — pod may be starting</div>
+                  ) : (
+                    threatFeed.by_source.map(({ source, count }) => {
+                      const isOtx = source !== 'AbuseIPDB Blacklist' && source !== 'Feodo Tracker'
+                      const color = isOtx ? '#a78bfa' : source === 'Feodo Tracker' ? '#f87171' : '#fb923c'
+                      return (
+                        <div key={source} style={{ marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                            <span style={{ fontSize: '10px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              {isOtx && <span style={{ color: '#a78bfa', marginRight: '5px' }}>◉</span>}
+                              {source}
+                            </span>
+                            <span style={{ fontSize: '10px', color, flexShrink: 0, fontWeight: 'bold', marginLeft: '8px' }}>
+                              {count.toLocaleString()}
+                            </span>
+                          </div>
+                          <div style={{ height: '3px', background: '#1e2535', borderRadius: '2px' }}>
+                            <div style={{ height: '100%', width: `${(count / threatFeed.total) * 100}%`, background: color, borderRadius: '2px' }} />
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+                <div style={CARD}>
+                  <div style={{ fontSize: '10px', color: '#a78bfa', letterSpacing: '2px', marginBottom: '16px' }}>OTX PULSE BREAKDOWN</div>
+                  {threatFeed.by_source.filter(s => s.source !== 'AbuseIPDB Blacklist' && s.source !== 'Feodo Tracker').length > 0 ? (
+                    <HBarChart
+                      data={threatFeed.by_source
+                        .filter(s => s.source !== 'AbuseIPDB Blacklist' && s.source !== 'Feodo Tracker')
+                        .map(s => ({ label: s.source, count: s.count }))}
+                      color="#a78bfa"
+                    />
+                  ) : (
+                    <div style={{ fontSize: '11px', color: '#475569' }}>No OTX pulses loaded yet</div>
+                  )}
+                  <div style={{ marginTop: '20px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {[
+                      { label: '◉ OTX Pulse', color: '#a78bfa' },
+                      { label: '● Feodo Tracker', color: '#f87171' },
+                      { label: '● AbuseIPDB Blacklist', color: '#fb923c' },
+                    ].map(({ label, color }) => (
+                      <span key={label} style={{ fontSize: '9px', color, letterSpacing: '1px' }}>{label}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Pipeline health */}
           {pipeline && (

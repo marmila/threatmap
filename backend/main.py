@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters
 from kafka_consumer import start_kafka_consumer
-from otx_poller import start_threat_poller
+from otx_poller import start_threat_poller, _threat_ips
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,6 +80,17 @@ async def ws_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         _clients.discard(websocket)
+
+
+@app.get("/api/threat-feed")
+async def threat_feed():
+    from collections import Counter
+    counts = Counter(_threat_ips.values())
+    by_source = sorted(
+        [{"source": src, "count": cnt} for src, cnt in counts.items()],
+        key=lambda x: -x["count"],
+    )
+    return {"total": len(_threat_ips), "by_source": by_source}
 
 
 @app.get("/api/events/recent")
