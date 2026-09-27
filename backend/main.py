@@ -671,23 +671,18 @@ async def pipeline_health():
     if (cached := _cache_get("pipeline_health")) is not None:
         return cached
     db = get_db()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
-    sensor_agg, protocol_agg = await asyncio.gather(
-        db.events.aggregate([
-            {"$group": {"_id": "$honeypot", "last_seen": {"$max": "$_ts"}}},
-            {"$sort": {"_id": 1}},
-        ]).to_list(length=None),
-        db.events.aggregate([
-            {"$match": {"protocol": {"$nin": [None, "unknown"]}}},
-            {"$group": {"_id": "$protocol", "last_seen": {"$max": "$_ts"}}},
-            {"$sort": {"_id": 1}},
-        ]).to_list(length=None),
+    sensor_doc, protocol_doc = await asyncio.gather(
+        db.stats.find_one({"_id": "honeypot_last_seen"}),
+        db.stats.find_one({"_id": "protocol_last_seen"}),
     )
 
     def _status(last_seen):
         if not last_seen:
             return "red"
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
         age = (now - last_seen).total_seconds()
         if age < 300:
             return "green"
@@ -698,6 +693,8 @@ async def pipeline_health():
     def _fmt(last_seen):
         if not last_seen:
             return "never"
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
         age = (now - last_seen).total_seconds()
         if age < 60:
             return f"{int(age)}s ago"
@@ -705,15 +702,18 @@ async def pipeline_health():
             return f"{int(age / 60)}m ago"
         return f"{int(age / 3600)}h ago"
 
+    sensor_ts = (sensor_doc or {}).get("ts", {})
+    protocol_ts = (protocol_doc or {}).get("ts", {})
+
     result = {
-        "sensors": [
-            {"name": s["_id"], "age_label": _fmt(s["last_seen"]), "status": _status(s["last_seen"])}
-            for s in sensor_agg if s["_id"]
-        ],
-        "protocols": [
-            {"name": p["_id"], "age_label": _fmt(p["last_seen"]), "status": _status(p["last_seen"])}
-            for p in protocol_agg if p["_id"]
-        ],
+        "sensors": sorted(
+            [{"name": name, "age_label": _fmt(ts), "status": _status(ts)} for name, ts in sensor_ts.items() if name],
+            key=lambda x: x["name"],
+        ),
+        "protocols": sorted(
+            [{"name": name, "age_label": _fmt(ts), "status": _status(ts)} for name, ts in protocol_ts.items() if name and name != "unknown"],
+            key=lambda x: x["name"],
+        ),
     }
     _stats_cache["pipeline_health"] = (result, time.monotonic() + 60)
     return result

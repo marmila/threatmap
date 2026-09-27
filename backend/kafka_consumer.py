@@ -36,6 +36,12 @@ _counter_buf: dict[str, dict[str, int]] = {
     "event_type_counts": {},
     "org_counts": {},
 }
+# Tracks max last_seen timestamp per protocol and honeypot — flushed alongside counters.
+# Lets pipeline_health read two O(1) stats docs instead of scanning 850K+ events.
+_last_seen_buf: dict[str, dict[str, datetime]] = {
+    "protocol_last_seen": {},
+    "honeypot_last_seen": {},
+}
 _counter_lock = asyncio.Lock()
 _COUNTER_FLUSH_INTERVAL = 30.0
 
@@ -407,6 +413,14 @@ def _buffer_counters(event: dict):
         org_key = org.replace(".", "|")
         buf["org_counts"][org_key] = buf["org_counts"].get(org_key, 0) + 1
 
+    now = datetime.now(timezone.utc)
+    proto_ls = _last_seen_buf["protocol_last_seen"]
+    if protocol not in proto_ls or now > proto_ls[protocol]:
+        proto_ls[protocol] = now
+    hp_ls = _last_seen_buf["honeypot_last_seen"]
+    if honeypot not in hp_ls or now > hp_ls[honeypot]:
+        hp_ls[honeypot] = now
+
 
 async def _flush_counters():
     while True:
@@ -416,12 +430,16 @@ async def _flush_counters():
             hp = {k: dict(v) for k, v in _counter_buf["honeypot_counts"].items()}
             et = dict(_counter_buf["event_type_counts"])
             org = dict(_counter_buf["org_counts"])
+            proto_ls = dict(_last_seen_buf["protocol_last_seen"])
+            hp_ls = dict(_last_seen_buf["honeypot_last_seen"])
             _counter_buf["protocol_counts"].clear()
             _counter_buf["honeypot_counts"].clear()
             _counter_buf["event_type_counts"].clear()
             _counter_buf["org_counts"].clear()
+            _last_seen_buf["protocol_last_seen"].clear()
+            _last_seen_buf["honeypot_last_seen"].clear()
 
-        if not any([proto, hp, et, org]):
+        if not any([proto, hp, et, org, proto_ls, hp_ls]):
             continue
 
         db = get_db()
@@ -449,6 +467,18 @@ async def _flush_counters():
             ops.append(db.stats.update_one(
                 {"_id": "honeypot_counts"},
                 {"$inc": inc},
+                upsert=True,
+            ))
+        if proto_ls:
+            ops.append(db.stats.update_one(
+                {"_id": "protocol_last_seen"},
+                {"$max": {f"ts.{k}": v for k, v in proto_ls.items()}},
+                upsert=True,
+            ))
+        if hp_ls:
+            ops.append(db.stats.update_one(
+                {"_id": "honeypot_last_seen"},
+                {"$max": {f"ts.{k}": v for k, v in hp_ls.items()}},
                 upsert=True,
             ))
         try:
