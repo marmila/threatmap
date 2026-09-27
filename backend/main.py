@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters
+from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters, backfill_credential_counters
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller, _threat_ips
 
@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
     await ensure_indexes()
     asyncio.create_task(_run_backfill())
     asyncio.create_task(backfill_stats_counters())
+    asyncio.create_task(backfill_credential_counters())
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -252,24 +253,18 @@ async def credentials_stats():
     if (cached := _cache_get("credentials")) is not None:
         return cached
     db = get_db()
-    username_pipeline = [
-        {"$match": {"username": {"$nin": [None, ""]}}},
-        {"$group": {"_id": "$username", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 10},
-        {"$project": {"username": "$_id", "count": 1, "_id": 0}},
-    ]
-    password_pipeline = [
-        {"$match": {"password": {"$nin": [None, ""], "$not": {"$regex": "^[0-9a-f]{40}$"}}}},
-        {"$group": {"_id": "$password", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 10},
-        {"$project": {"password": "$_id", "count": 1, "_id": 0}},
-    ]
-    top_usernames, top_passwords = await asyncio.gather(
-        db.events.aggregate(username_pipeline).to_list(10),
-        db.events.aggregate(password_pipeline).to_list(10),
+    username_doc, password_doc = await asyncio.gather(
+        db.stats.find_one({"_id": "username_counts"}),
+        db.stats.find_one({"_id": "password_counts"}),
     )
+    top_usernames = sorted(
+        [{"username": k, "count": v} for k, v in (username_doc or {}).get("counts", {}).items()],
+        key=lambda x: -x["count"],
+    )[:10]
+    top_passwords = sorted(
+        [{"password": k, "count": v} for k, v in (password_doc or {}).get("counts", {}).items()],
+        key=lambda x: -x["count"],
+    )[:10]
     result = {"top_usernames": top_usernames, "top_passwords": top_passwords}
     _cache_set("credentials", result)
     return result

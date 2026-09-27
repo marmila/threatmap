@@ -133,6 +133,45 @@ async def backfill_stats_counters():
     logger.info("Stats counters initialized")
 
 
+async def backfill_credential_counters():
+    """One-time backfill: initialize username_counts and password_counts from existing events.
+
+    Runs in background at startup. Skipped if both docs already exist.
+    After init, _flush_counters() keeps them updated via $inc.
+    Without this, the first cold hit on /api/stats/credentials would scan 850K+ events.
+    """
+    stats_col = get_db().stats
+    existing = await stats_col.count_documents(
+        {"_id": {"$in": ["username_counts", "password_counts"]}}
+    )
+    if existing == 2:
+        logger.info("Credential counters already initialized, skipping backfill")
+        return
+
+    col = get_db().events
+    logger.info("Initializing credential counters from existing events (one-time)...")
+
+    username_agg, password_agg = await asyncio.gather(
+        col.aggregate([
+            {"$match": {"username": {"$nin": [None, ""]}}},
+            {"$group": {"_id": "$username", "count": {"$sum": 1}}},
+        ]).to_list(None),
+        col.aggregate([
+            {"$match": {"password": {"$nin": [None, ""], "$not": {"$regex": "^[0-9a-f]{40}$"}}}},
+            {"$group": {"_id": "$password", "count": {"$sum": 1}}},
+        ]).to_list(None),
+    )
+
+    username_counts = {r["_id"][:200]: r["count"] for r in username_agg if r["_id"]}
+    password_counts = {r["_id"][:200]: r["count"] for r in password_agg if r["_id"]}
+
+    await asyncio.gather(
+        stats_col.update_one({"_id": "username_counts"}, {"$set": {"counts": username_counts}}, upsert=True),
+        stats_col.update_one({"_id": "password_counts"}, {"$set": {"counts": password_counts}}, upsert=True),
+    )
+    logger.info(f"Credential counters initialized: {len(username_counts)} usernames, {len(password_counts)} passwords")
+
+
 async def backfill_software_org():
     """One-time backfill: add software + org fields to existing events that lack them.
 

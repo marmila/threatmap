@@ -28,6 +28,8 @@ _ip_timestamps: dict[str, list[float]] = {}  # ip -> recent hit timestamps for v
 _ip_check_cache: dict[str, tuple[int, bool, float]] = {}  # ip -> (prev_count, is_multi, expires_at)
 _IP_CHECK_TTL = 300.0
 
+_SHA1_RE = re.compile(r'^[0-9a-f]{40}$')
+
 # In-memory counter buffer — flushed to MongoDB every 30s instead of on every insert.
 # Prevents write lock contention when 8 workers simultaneously $inc the same 3 docs.
 _counter_buf: dict[str, dict[str, int]] = {
@@ -35,6 +37,8 @@ _counter_buf: dict[str, dict[str, int]] = {
     "honeypot_counts": {},
     "event_type_counts": {},
     "org_counts": {},
+    "username_counts": {},
+    "password_counts": {},
 }
 # Tracks max last_seen timestamp per protocol and honeypot — flushed alongside counters.
 # Lets pipeline_health read two O(1) stats docs instead of scanning 850K+ events.
@@ -421,6 +425,16 @@ def _buffer_counters(event: dict):
     if honeypot not in hp_ls or now > hp_ls[honeypot]:
         hp_ls[honeypot] = now
 
+    username = event.get("username")
+    if username:
+        k = username[:200]
+        buf["username_counts"][k] = buf["username_counts"].get(k, 0) + 1
+
+    password = event.get("password")
+    if password and not _SHA1_RE.match(password):
+        k = password[:200]
+        buf["password_counts"][k] = buf["password_counts"].get(k, 0) + 1
+
 
 async def _flush_counters():
     while True:
@@ -430,16 +444,20 @@ async def _flush_counters():
             hp = {k: dict(v) for k, v in _counter_buf["honeypot_counts"].items()}
             et = dict(_counter_buf["event_type_counts"])
             org = dict(_counter_buf["org_counts"])
+            usernames = dict(_counter_buf["username_counts"])
+            passwords = dict(_counter_buf["password_counts"])
             proto_ls = dict(_last_seen_buf["protocol_last_seen"])
             hp_ls = dict(_last_seen_buf["honeypot_last_seen"])
             _counter_buf["protocol_counts"].clear()
             _counter_buf["honeypot_counts"].clear()
             _counter_buf["event_type_counts"].clear()
             _counter_buf["org_counts"].clear()
+            _counter_buf["username_counts"].clear()
+            _counter_buf["password_counts"].clear()
             _last_seen_buf["protocol_last_seen"].clear()
             _last_seen_buf["honeypot_last_seen"].clear()
 
-        if not any([proto, hp, et, org, proto_ls, hp_ls]):
+        if not any([proto, hp, et, org, usernames, passwords, proto_ls, hp_ls]):
             continue
 
         db = get_db()
@@ -467,6 +485,18 @@ async def _flush_counters():
             ops.append(db.stats.update_one(
                 {"_id": "honeypot_counts"},
                 {"$inc": inc},
+                upsert=True,
+            ))
+        if usernames:
+            ops.append(db.stats.update_one(
+                {"_id": "username_counts"},
+                {"$inc": {f"counts.{k}": v for k, v in usernames.items()}},
+                upsert=True,
+            ))
+        if passwords:
+            ops.append(db.stats.update_one(
+                {"_id": "password_counts"},
+                {"$inc": {f"counts.{k}": v for k, v in passwords.items()}},
                 upsert=True,
             ))
         if proto_ls:
