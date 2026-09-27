@@ -39,6 +39,7 @@ _counter_buf: dict[str, dict[str, int]] = {
     "org_counts": {},
     "username_counts": {},
     "password_counts": {},
+    "new_ip_inc": {},  # {"_": n} — count of first-ever IPs this flush interval
 }
 # Tracks max last_seen timestamp per protocol and honeypot — flushed alongside counters.
 # Lets pipeline_health read two O(1) stats docs instead of scanning 850K+ events.
@@ -425,6 +426,9 @@ def _buffer_counters(event: dict):
     if honeypot not in hp_ls or now > hp_ls[honeypot]:
         hp_ls[honeypot] = now
 
+    if event.get("previous_count") == 0:
+        buf["new_ip_inc"]["_"] = buf["new_ip_inc"].get("_", 0) + 1
+
     username = event.get("username")
     if username:
         k = username[:200]
@@ -446,6 +450,7 @@ async def _flush_counters():
             org = dict(_counter_buf["org_counts"])
             usernames = dict(_counter_buf["username_counts"])
             passwords = dict(_counter_buf["password_counts"])
+            new_ip_inc = _counter_buf["new_ip_inc"].get("_", 0)
             proto_ls = dict(_last_seen_buf["protocol_last_seen"])
             hp_ls = dict(_last_seen_buf["honeypot_last_seen"])
             _counter_buf["protocol_counts"].clear()
@@ -454,10 +459,11 @@ async def _flush_counters():
             _counter_buf["org_counts"].clear()
             _counter_buf["username_counts"].clear()
             _counter_buf["password_counts"].clear()
+            _counter_buf["new_ip_inc"].clear()
             _last_seen_buf["protocol_last_seen"].clear()
             _last_seen_buf["honeypot_last_seen"].clear()
 
-        if not any([proto, hp, et, org, usernames, passwords, proto_ls, hp_ls]):
+        if not any([proto, hp, et, org, usernames, passwords, new_ip_inc, proto_ls, hp_ls]):
             continue
 
         db = get_db()
@@ -485,6 +491,12 @@ async def _flush_counters():
             ops.append(db.stats.update_one(
                 {"_id": "honeypot_counts"},
                 {"$inc": inc},
+                upsert=True,
+            ))
+        if new_ip_inc:
+            ops.append(db.stats.update_one(
+                {"_id": "unique_ip_count"},
+                {"$inc": {"count": new_ip_inc}},
                 upsert=True,
             ))
         if usernames:

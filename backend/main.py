@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters, backfill_credential_counters
+from db import close_db, get_db, ensure_indexes, backfill_software_org, backfill_stats_counters, backfill_credential_counters, backfill_unique_ip_count, backfill_last_seen
 from kafka_consumer import start_kafka_consumer
 from otx_poller import start_threat_poller, _threat_ips
 
@@ -56,6 +56,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_run_backfill())
     asyncio.create_task(backfill_stats_counters())
     asyncio.create_task(backfill_credential_counters())
+    asyncio.create_task(backfill_unique_ip_count())
+    asyncio.create_task(backfill_last_seen())
     asyncio.create_task(start_kafka_consumer(_broadcast))
     asyncio.create_task(start_threat_poller())
     yield
@@ -131,10 +133,6 @@ async def stats():
         {"$limit": 10},
         {"$project": {"ip": "$_id", "count": 1, "country": 1, "country_code": 1, "known_threat": 1, "_id": 0}},
     ]
-    unique_ip_pipeline = [
-        {"$group": {"_id": "$src_ip"}},
-        {"$count": "count"},
-    ]
     _noise = {
         "cowrie.session.connect", "cowrie.session.closed", "cowrie.session.params",
         "cowrie.client.kex", "cowrie.client.version", "cowrie.client.lex",
@@ -143,15 +141,15 @@ async def stats():
         "cowrie.direct-tcpip.data", "cowrie.direct-tcpip.ja4h",
     }
 
-    top_countries, top_ips, unique_ip_result, protocol_doc, honeypot_doc, event_type_doc = await asyncio.gather(
+    top_countries, top_ips, unique_ip_doc, protocol_doc, honeypot_doc, event_type_doc = await asyncio.gather(
         db.events.aggregate(country_pipeline).to_list(10),
         db.events.aggregate(ip_pipeline).to_list(10),
-        db.events.aggregate(unique_ip_pipeline).to_list(1),
+        db.stats.find_one({"_id": "unique_ip_count"}),
         db.stats.find_one({"_id": "protocol_counts"}),
         db.stats.find_one({"_id": "honeypot_counts"}),
         db.stats.find_one({"_id": "event_type_counts"}),
     )
-    unique_ips = unique_ip_result[0]["count"] if unique_ip_result else 0
+    unique_ips = (unique_ip_doc or {}).get("count", 0)
 
     # Protocol breakdown — O(1) read from materialized counter.
     if protocol_doc:
@@ -489,7 +487,7 @@ async def analytics_overview():
         events_today,
         events_yesterday,
         known_threats_today,
-        unique_ip_list,
+        unique_ip_doc,
         abuse_today,
         shodan_today,
         shodan_total,
@@ -502,7 +500,7 @@ async def analytics_overview():
         db.events.count_documents({"_ts": {"$gte": today_start}}),
         db.events.count_documents({"_ts": {"$gte": yesterday_start, "$lt": today_start}}),
         db.events.count_documents({"_ts": {"$gte": today_start}, "known_threat": True}),
-        db.events.distinct("src_ip"),
+        db.stats.find_one({"_id": "unique_ip_count"}),
         db.ip_cache.count_documents({"abuse_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$gte": today_naive}}),
         db.ip_cache.count_documents({"shodan_cached_at": {"$exists": True}}),
@@ -511,7 +509,7 @@ async def analytics_overview():
         db.ip_cache.count_documents({"abuse_data.score": {"$gte": 50}}),
         db.ip_cache.count_documents({"abuse_cached_at": {"$exists": True}}),
     )
-    unique_ips = len(unique_ip_list)
+    unique_ips = (unique_ip_doc or {}).get("count", 0)
     threat_rate = round(threat_count / total_checked * 100, 1) if total_checked > 0 else 0.0
     result = {
         "total_events": total_events,
@@ -547,7 +545,7 @@ async def analytics_timeline(days: int = 7):
     ]
     results = await db.events.aggregate(pipeline).to_list(days * 24)
     data = [{"dow": r["_id"]["dow"], "hour": r["_id"]["hour"], "count": r["count"]} for r in results]
-    _stats_cache[cache_key] = (data, time.monotonic() + 300)
+    _stats_cache[cache_key] = (data, time.monotonic() + 1800)
     return data
 
 

@@ -133,6 +133,58 @@ async def backfill_stats_counters():
     logger.info("Stats counters initialized")
 
 
+async def backfill_last_seen():
+    """One-time backfill: compute last_seen per honeypot and protocol from existing events.
+
+    After init, _flush_counters() keeps them current via $max every 30s.
+    Without this, pipeline_health shows empty sensors/protocols until the first event flush.
+    """
+    stats_col = get_db().stats
+    existing = await stats_col.count_documents(
+        {"_id": {"$in": ["honeypot_last_seen", "protocol_last_seen"]}}
+    )
+    if existing == 2:
+        logger.info("Last-seen counters already initialized, skipping backfill")
+        return
+    col = get_db().events
+    logger.info("Initializing last-seen counters from existing events (one-time)...")
+    sensor_agg, protocol_agg = await asyncio.gather(
+        col.aggregate([{"$group": {"_id": "$honeypot", "ts": {"$max": "$_ts"}}}]).to_list(None),
+        col.aggregate([
+            {"$match": {"protocol": {"$nin": [None, "unknown"]}}},
+            {"$group": {"_id": "$protocol", "ts": {"$max": "$_ts"}}},
+        ]).to_list(None),
+    )
+    honeypot_ts = {r["_id"]: r["ts"] for r in sensor_agg if r["_id"]}
+    protocol_ts = {r["_id"]: r["ts"] for r in protocol_agg if r["_id"]}
+    await asyncio.gather(
+        stats_col.update_one({"_id": "honeypot_last_seen"}, {"$set": {"ts": honeypot_ts}}, upsert=True),
+        stats_col.update_one({"_id": "protocol_last_seen"}, {"$set": {"ts": protocol_ts}}, upsert=True),
+    )
+    logger.info(f"Last-seen counters initialized: {len(honeypot_ts)} sensors, {len(protocol_ts)} protocols")
+
+
+async def backfill_unique_ip_count():
+    """One-time backfill: count distinct src_ip values into stats.unique_ip_count.
+
+    After init, _flush_counters() increments it by 1 per new IP seen (previous_count==0).
+    Eliminates the DISTINCT_SCAN from /api/stats and analytics_overview on every cold hit.
+    """
+    stats_col = get_db().stats
+    if await stats_col.count_documents({"_id": "unique_ip_count"}):
+        logger.info("Unique IP count already initialized, skipping backfill")
+        return
+    col = get_db().events
+    logger.info("Initializing unique IP count (one-time DISTINCT_SCAN)...")
+    result = await col.aggregate([
+        {"$group": {"_id": "$src_ip"}},
+        {"$count": "count"},
+    ]).to_list(1)
+    count = result[0]["count"] if result else 0
+    await stats_col.update_one({"_id": "unique_ip_count"}, {"$set": {"count": count}}, upsert=True)
+    logger.info(f"Unique IP count initialized: {count}")
+
+
 async def backfill_credential_counters():
     """One-time backfill: initialize username_counts and password_counts from existing events.
 
