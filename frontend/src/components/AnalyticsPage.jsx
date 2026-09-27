@@ -464,7 +464,8 @@ export default function AnalyticsPage({ onBack }) {
   const shodanMonthUsed = overview?.shodan_this_month || 0
 
   return (
-    <div style={{ background: BG, minHeight: '100vh', color: '#e2e8f0', fontFamily: MONO, padding: isMobile ? '16px' : '24px 32px' }}>
+    <div style={{ background: BG, minHeight: '100vh', color: '#e2e8f0', fontFamily: MONO }}>
+    <div style={{ maxWidth: '1600px', margin: '0 auto', padding: isMobile ? '16px' : '24px 32px' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
@@ -962,6 +963,7 @@ export default function AnalyticsPage({ onBack }) {
           <div style={{ height: '48px' }} />
         </>
       )}
+    </div>
     </div>
   )
 }
